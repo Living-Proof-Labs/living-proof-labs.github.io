@@ -28,7 +28,8 @@ attach a Pages domain. On 2026-10-27, the rollout owner verified the branded
 directory and LivingProof manual, HTTPS enforcement, old-host redirects, deep
 links, navigation and interactive manual search. See the issue for rollout evidence.
 Six product/specification manual landing pages returned HTTP 200 on 2026-10-27.
-The guidelines manual returned HTTP 404 and is not advertised as live.
+The guidelines manual subsequently returned HTTP 200 at source
+`cd434afa1ce9fdb7bb5aff394222622b18657199` and joins the rendered directory.
 
 ## Validation
 
