@@ -1,18 +1,21 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Documentation directory
 
+[Open the documentation directory](https://docs.livingprooflabs.com/) or the
+[LivingProof manual](https://docs.livingprooflabs.com/livingproof/).
+
 Small Markdown-first directory for Living Proof Labs. Edit `index.md` to maintain
 the directory; each project's manual remains independently deployed.
 
 ## Publication
 
-The rollout owner configures Pages to **Deploy from a branch → main → / (root)**.
+Pages is configured to **Deploy from a branch → main → / (root)**.
 GitHub's supported native Jekyll build reads `_config.yml` and `_layouts/`.
 No custom workflow, additional token, or permission grant is needed for this
 content. Repository Pages enablement still requires authorized settings access.
 Do not add `.nojekyll`.
 
-The intended canonical URL is `https://docs.livingprooflabs.com/`. This is the
+The verified canonical URL is `https://docs.livingprooflabs.com/`. This is the
 organization-site repository, so `baseurl` is empty. `/livingproof/` resolves to
 the separately published project on both the default organization hostname and
 the custom hostname. Do not copy manuals into this repository. The marketing
@@ -21,7 +24,11 @@ project keeps its own `livingprooflabs.com` override.
 Domain verification, custom-domain attachment, DNS and HTTPS are coordinated in
 [the rollout issue](https://github.com/Living-Proof-Labs/.github/issues/3).
 The configuration's `url` affects canonical markup; it does not configure DNS or
-attach a Pages domain. Announce the branded URL only after live validation.
+attach a Pages domain. On 2026-10-27, the rollout owner verified the branded
+directory and LivingProof manual, HTTPS enforcement, old-host redirects, deep
+links, navigation and interactive manual search. See the issue for rollout evidence.
+The second hosted manual remains separate work; only LivingProof is listed as a
+published manual.
 
 ## Validation
 
@@ -42,7 +49,7 @@ validates local files and fragments while treating `/livingproof/` as an externa
 project route. Run `python3 tools/check_site.py _site --live` to request that route
 on the default GitHub hostname and check remote directory links. Network failures
 are failures, not proof that a target is absent. The rollout owner separately
-checks the branded hostname after cutover.
+checks the branded hostname as well as the old-host redirects.
 
 Serve `_site` with `python3 -m http.server --directory _site 8000` and inspect
 desktop/mobile layouts, keyboard navigation, and the manual link. A local server
