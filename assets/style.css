@@ -14,3 +14,4 @@ footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #c9d9d7; fon
 .skip { position: absolute; left: -10000px; }
 .skip:focus { position: static; }
 @media (max-width: 480px) { body { padding: .8rem; } th, td { padding: .5rem .25rem; } }
+pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
