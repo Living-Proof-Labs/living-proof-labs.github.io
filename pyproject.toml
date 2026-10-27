@@ -1,0 +1,7 @@
+[project]
+name = "living-proof-labs-documentation"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["zensical==0.0.73", "playwright==1.64.1"]
+[tool.uv]
+package = false

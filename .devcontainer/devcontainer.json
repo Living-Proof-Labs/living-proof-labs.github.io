@@ -1,0 +1,8 @@
+{
+  "name": "Root documentation",
+  "build": {"dockerfile": "../Dockerfile", "context": "..", "target": "development"},
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "postCreateCommand": "task setup",
+  "remoteUser": "root"
+}

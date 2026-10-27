@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+.md-typeset h1 { font-weight: 750; letter-spacing: -.035em; }
+.md-typeset .lead { font-size: 1.2em; line-height: 1.65; max-width: 48rem; }
+.md-typeset .reading-paths { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,14rem),1fr)); gap: 1rem; margin: 1.5rem 0; }
+.md-typeset .reading-paths > div { border: 1px solid var(--md-default-fg-color--lightest); border-radius: .6rem; padding: 1rem; background: var(--md-code-bg-color); }
+.md-typeset .reading-paths h3 { margin-top: 0; }
+.md-typeset pre > code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-typeset .docs-identity { font-size: .72rem; color: var(--md-default-fg-color--light); }

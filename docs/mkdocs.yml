@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+site_name: Living Proof Labs
+site_description: From robot capability requirements to evidence and the next improvement
+site_url: https://docs.livingprooflabs.com/
+repo_url: https://github.com/Living-Proof-Labs/living-proof-labs.github.io
+repo_name: Source
+use_directory_urls: false
+strict: true
+theme:
+  name: zensical
+  font: false
+  features:
+    - navigation.expand
+    - navigation.footer
+    - navigation.top
+    - search.highlight
+  palette:
+    - media: '(prefers-color-scheme)'
+      toggle:
+        icon: lucide/sun-moon
+        name: Switch to light mode
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      toggle:
+        icon: lucide/sun
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      toggle:
+        icon: lucide/moon
+        name: Switch to system preference
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+extra_css:
+  - assets/landing.css
+nav:
+  - Start here: index.md
+  - Vision and terminology: vision.md
+  - Manual directory: index.html#published-manuals
+  - Contribute: contribute.md
+  - Contributor tasks: tasks.md
+  - Version and source: source.md
+  - License: license.md

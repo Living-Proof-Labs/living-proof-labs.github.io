@@ -1,65 +1,67 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
-# Documentation directory
+# Living Proof Labs documentation root
 
-[Start here: documentation](https://docs.livingprooflabs.com/) or the
-[LivingProof manual](https://docs.livingprooflabs.com/livingproof/).
+**[Start here: documentation](https://docs.livingprooflabs.com/)**
 
-Small Markdown-first directory for Living Proof Labs. Edit `index.md` to maintain
-the directory; each project's manual remains independently deployed.
+The organization introduction, vision and seven-manual directory. Each product
+owns its own manual and deployment. This root uses Zensical for local search,
+responsive navigation and light/dark/system appearance; search does not index
+other repositories. Edit `index.md`, `vision.md` and `contribute.md`; generated
+Task reference and source identity are not separate authored sources.
+
+## Build and review
+
+Host prerequisites: Docker, Git and Task 3.54.0. The development image supplies
+Python 3.12, uv 0.12.23, Task 3.54.0, Chromium and locked Zensical dependencies.
+
+```sh
+docker build --target development -t root-docs .
+docker run --rm --network none --user "$(id -u):$(id -g)" \
+  -v "$PWD:/workspace" root-docs task verify
+```
+
+This host command is for Linux Docker hosts. The prepared development container
+uses the same Dockerfile; inside it, use `task setup` then `task verify` directly.
+`task build`, `task check` and `task test` can be run separately. No nested Docker
+is needed. Dependency updates require a deliberate `uv lock` change and review.
+The container's numeric user keeps generated output owned by the host contributor.
+
+Serve `artifacts/site` over HTTP to inspect the artifact. Browser tests exercise
+search result opening, preserved fragments/reload, keyboard/mobile controls and
+palette persistence. Results are individual JUnit cases in
+`artifacts/browser-tests.xml`; screenshots support review, not a full accessibility
+certification. Local links/assets and source identity are checked offline.
 
 ## Publication
 
-Pages is configured to **Deploy from a branch → main → / (root)**.
-GitHub's supported native Jekyll build reads `_config.yml` and `_layouts/`.
-No custom workflow, additional token, or permission grant is needed for this
-content. Repository Pages enablement still requires authorized settings access.
-Do not add `.nojekyll`.
+Selected route: **Pages → Build and deployment → Source: GitHub Actions**.
+Switch from the original `main` / root branch source only after candidate review.
+The existing custom domain and DNS remain unchanged. `.github/workflows/docs.yml`
+builds PR previews with `contents: read`; only the separate trusted-main deploy
+job has `pages: write` and `id-token: write`. It checks freshness inside the
+publication lock, verifies source identity and deploys the successful run's site.
+The deploy job does not check out or execute project code.
 
-The verified canonical URL is `https://docs.livingprooflabs.com/`. This is the
-organization-site repository, so `baseurl` is empty. `/livingproof/` resolves to
-the separately published project on both the default organization hostname and
-the custom hostname. Do not copy manuals into this repository. The marketing
-project keeps its own `livingprooflabs.com` override.
+Review artifacts expire after 14 days; the one-day Pages transfer artifact is
+transport, not a public download promise. The live manual remains published.
+Verify `build.json`, visible source identity, navigation, search and old links
+against the successful deployment before calling a change delivered.
 
-Domain verification, custom-domain attachment, DNS and HTTPS are coordinated in
-[the rollout issue](https://github.com/Living-Proof-Labs/.github/issues/3).
-The configuration's `url` affects canonical markup; it does not configure DNS or
-attach a Pages domain. On 2026-10-27, the rollout owner verified the branded
-directory and LivingProof manual, HTTPS enforcement, old-host redirects, deep
-links, navigation and interactive manual search. See the issue for rollout evidence.
-Six product/specification manual landing pages returned HTTP 200 on 2026-10-27.
-The guidelines manual subsequently returned HTTP 200 at source
-`cd434afa1ce9fdb7bb5aff394222622b18657199` and joins the rendered directory.
+## Compatibility and rollback
 
-## Validation
+Keep `/vision.html`, `/#published-manuals`, `/#livingproof`, prior section anchors
+and `/LICENSES/*.txt` working. `use_directory_urls: false` preserves HTML routes.
+The full vision retains Apache-2.0 attribution; see [license scopes](LICENSE.md).
 
-For a local build with Ruby 3.3.6 and Jekyll 3.10.0 (the native Pages Jekyll
-series), install the Markdown parser and build:
+The original `_config.yml`, `_layouts/` and `assets/style.css` remain as a branch
+Jekyll fallback. Before merge, the current public site is unchanged. A content
+rollback reverts the PR through review and rebuilds the last known-good source.
+If Actions publication itself is unavailable, an authorized operator can restore
+Pages to `main` / root using the retained Jekyll files. This fallback lacks the
+new search/theme interface; validate its links after any actual rollback. This is
+a documented procedure, not a claim that rollback was executed.
 
-```sh
-gem install jekyll -v 3.10.0 --no-document
-gem install kramdown-parser-gfm -v 1.1.0 --no-document
-jekyll build
-```
-
-Use an isolated Ruby environment or container; the Pages service manages its own
-dependencies. These commands are a local preview, not a replacement deployment.
-
-After building with Jekyll, run `python3 tools/check_site.py _site`. The checker
-validates local files and fragments while treating `/livingproof/` as an external
-project route. Run `python3 tools/check_site.py _site --live` to request that route
-on the default GitHub hostname and check remote directory links. Network failures
-are failures, not proof that a target is absent. The rollout owner separately
-checks the branded hostname as well as the old-host redirects.
-
-Serve `_site` with `python3 -m http.server --directory _site 8000` and inspect
-desktop/mobile layouts, keyboard navigation, and the manual link. A local server
-does not contain the separately deployed `/livingproof/` manual. On the live
-manual, exercise search, navigation and nested pages; do not treat fetching its
-search index as an interactive search test.
-
-Revert the content commit to roll back the directory. Domain rollback is separate
-and must follow the rollout issue; no content rollback changes mail or marketing
-routing.
-
-See [license scopes](LICENSE.md).
+The [portal rollout issue](https://github.com/Living-Proof-Labs/.github/issues/3)
+owns historical domain evidence. Neither this build nor a rollback changes DNS,
+mail or the marketing site. The bounded navigation exception in AGENTS.md allows
+current rendered-manual links while shared guidance stays pinned to v6.0.0.

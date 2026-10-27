@@ -4,13 +4,65 @@ title: Documentation
 ---
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-# Living Proof Labs documentation
+# Helping robots help humans
 
-Find a manual, explore a project, or learn how to contribute.
-Read our [vision, terminology, and current scope](vision.html): connecting
-software and capability requirements to evidence, policy grades, reports, and
-a developer feedback loop. Fixtures demonstrate that loop today; hardware and
-capability-pipeline simulation remain future work.
+<a id="living-proof-labs-documentation"></a>
+
+<div class="lead" markdown>
+A capability claim should lead somewhere you can inspect: a requirement, a run,
+the evidence behind its assessment, and a useful next step.
+**Living Proof Labs is building that connection.**
+</div>
+
+A software change can alter what a robot does. We want developers to ask
+*“Does it still pause when asked—and under which conditions?”* and follow the
+answer from versioned software through a repeatable scenario to an explainable
+report. When a result changes, evidence should help people investigate and improve
+it, not leave them with an unexplained score.
+
+<div class="reading-paths" markdown>
+<div markdown>
+### Understand the vision
+Follow the [requirement-to-improvement loop](vision.html), with a shared vocabulary
+for specifications, evidence, assessments and policy.
+</div>
+<div markdown>
+### Explore what works today
+Start with [recorded fixture examples](vision.html#see-it-today). Inspect how the
+same observation can meet one requirement and fail another.
+</div>
+<div markdown>
+### Find your part
+Choose a [project manual](#published-manuals) for commands, contracts, execution,
+reporting or contribution. Each project owns its technical detail.
+</div>
+</div>
+
+## From software to a useful next step
+
+**Versioned software and requirements → execution and evidence → separate
+assessments → explicit policy → traceable report → investigation and iteration.**
+
+The intended execution paths include repeatable simulation and, eventually,
+physical robots in their own controlled environments. Evidence keeps the original
+observations and their context. Deterministic checks, human judgment and agentic
+evaluation should remain distinguishable; a versioned policy explains how supported
+assessments become a grade. Log analysis and coding agents can then help propose
+and test changes, while developers retain responsibility for investigating them.
+
+[Walk through the full loop](vision.html#from-a-requirement-to-the-next-improvement)
+and [learn what a grade does—and does not—mean](vision.html#evaluation-is-not-diagnosis).
+
+!!! info "Current scope"
+    Today, versioned specifications, deterministic fixtures, recorded/mock
+    assessments and portable reports demonstrate parts of this loop. A standalone
+    MuJoCo example exercises a native simulation engine. Connected simulation
+    verification, physical-robot execution, live evaluator providers and automated
+    diagnosis-to-code workflows remain integration work. Reports do not certify
+    safety, and an engine demonstration is not evidence of an integrated pipeline.
+
+Search on this site covers this introduction and its local reference pages.
+Open a project's manual to search that project's documentation.
 
 <a id="livingproof"></a>
 
