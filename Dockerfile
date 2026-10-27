@@ -21,6 +21,6 @@ WORKDIR /workspace
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=secret,id=ca,required=false,mode=0444 set -eu; \
     if [ -f /run/secrets/ca ]; then export SSL_CERT_FILE=/run/secrets/ca; fi; \
-    uv sync --locked --no-python-downloads && chmod -R a+rX /opt/docs-venv
-ENV PATH="/opt/docs-venv/bin:${PATH}"
+    uv sync --locked --no-python-downloads && chmod -R a+rX /opt/docs-venv && rm -rf /tmp/uv-cache
+ENV PATH="/opt/docs-venv/bin:${PATH}" XDG_CONFIG_HOME=/tmp/docs-config XDG_CACHE_HOME=/tmp/docs-cache
 CMD ["task", "verify"]
