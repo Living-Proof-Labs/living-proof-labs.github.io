@@ -91,8 +91,15 @@ class BrowserTests(unittest.TestCase):
             self.page.keyboard.press('Enter')
             self.assertTrue(self.page.url.endswith('#__skip'))
             if width == 390:
+                # Start the drawer journey after the skip-link hash navigation settles.
+                # A fresh load keeps its pending hashchange from closing the drawer.
+                self.page.goto(self.base + '/')
+                self.page.reload()
                 self.page.locator('label.md-header__button[for="__drawer"]').first.click()
-                self.page.locator('.md-nav--primary').get_by_role('link', name='Vision and terminology', exact=True).click()
+                expect(self.page.locator('#__drawer')).to_be_checked()
+                link = self.page.locator('.md-nav--primary').get_by_role('link', name='Vision and terminology', exact=True)
+                expect(link).to_be_in_viewport()
+                link.click()
                 self.page.wait_for_url('**/vision.html')
             self.page.screenshot(path=str(ARTIFACTS / f'navigation-{width}.png'), full_page=True)
 
