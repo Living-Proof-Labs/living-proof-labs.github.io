@@ -27,9 +27,7 @@ be newer than its package release; check Version and source before installation.
 | [Robot capability specifications](https://docs.livingprooflabs.com/robot-capability-specs/) | Requirements, conditions and acceptance criteria |
 | [Common library](https://docs.livingprooflabs.com/livingproof-common/) | Shared library interfaces |
 | [MuJoCo simulator](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | Standalone native engine example; no capability-pipeline integration implied |
-
-The guidelines manual is not yet published. Read the
-[released v6.0.0 source guidance](https://github.com/Living-Proof-Labs/collaboration-guidelines/tree/v6.0.0).
+| [Collaboration guidelines](https://docs.livingprooflabs.com/collaboration-guidelines/) | Shared contribution and engineering standards |
 
 ## Project directory
 
