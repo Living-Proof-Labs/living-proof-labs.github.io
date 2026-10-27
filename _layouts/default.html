@@ -12,14 +12,21 @@
   <body>
     <a class="skip" href="#content">Skip to content</a>
     <header><nav aria-label="Main">
-      <a href="{{ '/' | relative_url }}">Documentation home</a>
+      <a href="https://docs.livingprooflabs.com/">Documentation home</a>
+      <a href="{{ '/vision.html' | relative_url }}">Vision and terminology</a>
       <a href="https://github.com/Living-Proof-Labs">Organization</a>
       <a href="https://livingprooflabs.com">Website</a>
     </nav></header>
     <main id="content">{{ content }}</main>
     <footer>
-      <p>Documentation by Living Proof Labs, licensed under
-        <a href="{{ '/LICENSES/CC-BY-4.0.txt' | relative_url }}">CC BY 4.0</a>.
+      {% if site.github.build_revision %}
+      <p><a href="https://github.com/Living-Proof-Labs/living-proof-labs.github.io/tree/{{ site.github.build_revision }}">Docs: development · {{ site.github.build_revision | slice: 0, 7 }}</a>
+        (source: {{ site.github.build_revision }})</p>
+      {% else %}<p>Local documentation preview; deployed source identity unavailable.</p>{% endif %}
+      <p>Documentation by Living Proof Labs. {% if page.license == "Apache-2.0" %}
+        This adapted page: <a href="{{ '/LICENSES/Apache-2.0.txt' | relative_url }}">Apache 2.0</a>.
+        {% else %}Licensed under
+        <a href="{{ '/LICENSES/CC-BY-4.0.txt' | relative_url }}">CC BY 4.0</a>.{% endif %}
         Layout and code: <a href="{{ '/LICENSES/Apache-2.0.txt' | relative_url }}">Apache 2.0</a>.
         <a href="https://github.com/Living-Proof-Labs/living-proof-labs.github.io">Directory source</a>.
       </p>

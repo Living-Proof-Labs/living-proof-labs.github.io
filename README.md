@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Documentation directory
 
-[Open the documentation directory](https://docs.livingprooflabs.com/) or the
+[Start here: documentation](https://docs.livingprooflabs.com/) or the
 [LivingProof manual](https://docs.livingprooflabs.com/livingproof/).
 
 Small Markdown-first directory for Living Proof Labs. Edit `index.md` to maintain
@@ -27,8 +27,8 @@ The configuration's `url` affects canonical markup; it does not configure DNS or
 attach a Pages domain. On 2026-10-27, the rollout owner verified the branded
 directory and LivingProof manual, HTTPS enforcement, old-host redirects, deep
 links, navigation and interactive manual search. See the issue for rollout evidence.
-The second hosted manual remains separate work; only LivingProof is listed as a
-published manual.
+Six product/specification manual landing pages returned HTTP 200 on 2026-10-27.
+The guidelines manual returned HTTP 404 and is not advertised as live.
 
 ## Validation
 
