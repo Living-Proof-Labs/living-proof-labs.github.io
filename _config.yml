@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+title: Living Proof Labs documentation
+description: Manuals and projects from Living Proof Labs
+url: https://docs.livingprooflabs.com
+baseurl: ""
+markdown: kramdown
+exclude:
+  - AGENTS.md
+  - README.md
+  - LICENSE.md
+  - LICENSES
+  - tools
