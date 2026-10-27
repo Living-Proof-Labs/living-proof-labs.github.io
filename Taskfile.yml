@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+version: '3'
+tasks:
+  setup:
+    desc: Install the locked documentation and browser tooling
+    cmds:
+      - uv sync --locked --no-python-downloads
+  build:
+    desc: Build the root manual from repository Markdown and actual Task help
+    cmds:
+      - uv run --locked --no-sync python tools/build_docs.py
+  check:
+    desc: Validate generated local links, historical anchors and source identity
+    cmds:
+      - uv run --locked --no-sync python tools/check_site.py artifacts/site
+  test:
+    desc: Exercise generated navigation, search and theme controls in Chromium
+    cmds:
+      - uv run --locked --no-sync python tests/browser.py
+  verify:
+    desc: Build and verify the delivered documentation artifact
+    cmds:
+      - task: build
+      - task: check
+      - task: test

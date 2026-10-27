@@ -9,3 +9,11 @@ exclude:
   - README.md
   - LICENSE.md
   - tools
+  - docs
+  - tests
+  - contribute.md
+  - Taskfile.yml
+  - Dockerfile
+  - pyproject.toml
+  - uv.lock
+  - artifacts

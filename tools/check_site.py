@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Check built directory links; optionally request live external destinations."""
 import argparse
+import json
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
@@ -37,7 +38,25 @@ def main():
     failures = []
     external = set()
     if root / "index.html" not in pages:
-        failures.append("Missing built index.html; build with Jekyll first")
+        failures.append("Missing built index.html; run task build first")
+    required = {
+        'index.html': ['living-proof-labs-documentation', 'livingproof', 'published-manuals',
+                       'project-directory', 'help-improve-the-documentation', 'version-and-source'],
+        'vision.html': ['helping-robots-help-humans', 'from-a-requirement-to-the-next-improvement',
+                        'what-goes-in-what-comes-out', 'see-it-today'],
+    }
+    for name, anchors in required.items():
+        page = pages.get(root / name)
+        for anchor in anchors:
+            if page is None or anchor not in page.ids:
+                failures.append(f'Missing historical route/anchor: {name}#{anchor}')
+    try:
+        identity = json.loads((root / 'build.json').read_text())
+        assert len(identity['source_commit']) == 40
+        for name in ['index.html', 'vision.html', 'tasks.html', 'source.html']:
+            assert identity['source_commit'] in (root / name).read_text(), name
+    except (OSError, ValueError, KeyError, AssertionError) as error:
+        failures.append(f'Invalid or inconsistent build identity: {error}')
     for path, page in pages.items():
         for href in page.links:
             url = urlsplit(href)

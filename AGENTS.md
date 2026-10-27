@@ -11,13 +11,16 @@ Use a draft pull request and independent agent review before merge.
 
 ## Bounded exceptions
 
-Native branch Pages builds this Markdown directory with GitHub's managed Jekyll.
-For this static editorial repository, validate the generated HTML and links with
-the Python standard-library checker, inspect desktop/mobile browser behavior, and
-record evidence in the pull request. Docker/Task, custom CI and automated releases
-are not required for this bounded directory; revisit this exception before adding
-application code or a custom build. This explicitly narrows the shared developer
-interface and release requirements without claiming hosted tests ran.
+The root is a documentation-only Zensical site. Repository Markdown stays canonical;
+Task generates the contributor reference from actual commands. Docker supplies the
+locked build/browser environment; CI uses those tasks and publishes only the
+verified artifact. Do not add application packaging or automated releases for this
+editorial site. Local search covers only the root pages, not remote manuals.
+
+Preserve /vision.html, root section fragments and license-file URLs. Keep the
+legacy Jekyll layout/configuration available for documented rollback; Actions is
+the selected publication route after candidate acceptance and the explicit Pages
+source transition. Revisit this exception if application behavior is introduced.
 
 Current repository directory links and the current hosted manual are intentional
 navigation exceptions to cross-repository version pinning. Keep shared guidance,

@@ -7,11 +7,11 @@ license: Apache-2.0
 
 # Helping robots help humans
 
-> [!NOTE]
-> **Under construction · Updated 26 October 2026**
-> We are building toward the workflow below. Today's releases demonstrate fixture
-> evidence and reports; capability-pipeline robot, simulator, and live evaluator integrations are still
-> ahead. Expect small, inspectable examples while the pieces take shape.
+!!! info "An evolving system, with explicit limits"
+    The current demonstrations use recorded fixtures and portable reports.
+    A standalone MuJoCo engine example is available; capability-pipeline simulation,
+    physical-robot execution and live evaluator integrations are future work.
+    The workflow below describes both the implemented pieces and the direction.
 
 Robots earn our confidence through what they can do, under conditions we can
 understand. **Living Proof Labs is building an open way to connect robot capability
@@ -54,6 +54,68 @@ something happened: it is a hypothesis to investigate, not proof of root cause o
 authority to change a grade. These reports do not certify robot safety. Our vision
 spans diverse robots, simulators, evaluation providers, and developer tools;
 those connections are not claims of implemented integrations or partnerships.
+
+## Start with the software under test
+
+A run is meaningful only when its context is clear. The intended system connects
+an identified software revision with a capability requirement, scenario, input
+conditions and execution environment. A changed controller, requirement, policy
+or environment can change the result for different reasons; those versions must
+stay visible rather than collapsing into one unqualified score.
+
+For example, a pause requirement might specify the initial motion, the pause
+request and a time limit. A scenario makes those conditions concrete. The executor
+collects observations; the evaluator checks what the observations support. The
+report should let a developer trace the conclusion back through those steps.
+The current pause examples use recorded fixture data, not a moving robot.
+
+## Simulation and eventual hardware
+
+Simulation can make scenarios repeatable and allow software changes to be checked
+before a physical run. The MuJoCo project currently demonstrates native engine
+execution; connecting that execution to capability scenarios, evidence manifests
+and evaluation is a separate integration boundary, not a delivered end-to-end flow.
+
+Hardware adds physical conditions, device configuration and operational controls.
+It needs a dedicated execution environment and people responsible for operating
+it. A passing fixture or simulation result does not establish real-world behavior.
+The vision is to compare evidence within its actual context, not substitute one
+kind of execution for another or control hardware from ordinary CI jobs.
+
+## Evaluation is not diagnosis
+
+**Evaluation asks whether evidence supports a requirement. Diagnosis asks why a
+behavior occurred.** These are different jobs, with different uncertainty.
+
+- Deterministic checks can apply explicit rules to measurements and report missing
+  inputs. Their precision depends on the observation and rule being appropriate.
+- Human assessments add judgment and rationale. Recorded human fixture assessments
+  are examples, not evidence that a live reviewer participated in a new run.
+- Agentic evaluators could interpret supported evidence representations and retain
+  their inputs, model/tool versions, reasoning summaries and evidence references.
+  Today's examples use scripted mock assessments, not live provider calls.
+
+Keep disagreements visible. The supported, versioned policy decides the grade;
+adding an evaluator does not automatically make its output compatible with a
+policy. Missing evidence must not silently become a pass. An understandable report
+shows what was assessed, the applicable requirement, supporting observations and
+remaining limits. Rendering a stored report does not silently recompute its grade.
+
+## From logs to the next software change
+
+After a failure or surprising change, a developer needs more than a label.
+Traceable logs and original evidence can support hypotheses about timing,
+configuration or software behavior. A future analysis adapter might extract
+signals, frames or summaries from a recording while retaining links to the
+original data and recording its transformations. A file format alone does not
+prove a provider can interpret it; input support and retention need explicit design.
+
+Log-analysis tools and coding agents could help investigate a hypothesis, suggest
+a patch or build a reproducer. Those suggestions are not proof of root cause and
+do not override a grade. Developers inspect the proposed change and rerun the
+scenario with the new software version. Comparing reports in their versioned
+contexts closes the loop. This connected agent-assisted workflow is a direction,
+not a claim of delivered provider integrations, autonomous fixes or partnerships.
 
 ## What goes in, what comes out
 
