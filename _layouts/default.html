@@ -1,0 +1,28 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title | escape }} · {{ site.title | escape }}</title>
+    <meta name="description" content="{{ site.description | escape }}">
+    <link rel="canonical" href="{{ page.url | absolute_url }}">
+    <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header><nav aria-label="Main">
+      <a href="{{ '/' | relative_url }}">Documentation home</a>
+      <a href="https://github.com/Living-Proof-Labs">Organization</a>
+      <a href="https://livingprooflabs.com">Website</a>
+    </nav></header>
+    <main id="content">{{ content }}</main>
+    <footer>
+      <p>Documentation by Living Proof Labs, licensed under
+        <a href="{{ '/LICENSES/CC-BY-4.0.txt' | relative_url }}">CC BY 4.0</a>.
+        Layout and code: <a href="{{ '/LICENSES/Apache-2.0.txt' | relative_url }}">Apache 2.0</a>.
+        <a href="https://github.com/Living-Proof-Labs/living-proof-labs.github.io">Directory source</a>.
+      </p>
+    </footer>
+  </body>
+</html>

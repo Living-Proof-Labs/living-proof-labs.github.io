@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+:root { color-scheme: light; font: 18px/1.6 system-ui, sans-serif; color: #192d36; background: #fafcfb; }
+body { max-width: 54rem; margin: auto; padding: 1.2rem; }
+a { color: #005d61; text-underline-offset: .18em; }
+a:hover { color: #003a3d; }
+a:focus-visible { outline: 3px solid #af5b00; outline-offset: 4px; }
+nav { display: flex; flex-wrap: wrap; gap: .7rem 1.5rem; }
+header { border-bottom: 1px solid #c9d9d7; padding: 1rem 0; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); line-height: 1.15; }
+h2 { margin-top: 2rem; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th, td { text-align: left; vertical-align: top; padding: .7rem; border-bottom: 1px solid #c9d9d7; overflow-wrap: anywhere; }
+footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #c9d9d7; font-size: .85rem; }
+.skip { position: absolute; left: -10000px; }
+.skip:focus { position: static; }
+@media (max-width: 480px) { body { padding: .8rem; } th, td { padding: .5rem .25rem; } }
