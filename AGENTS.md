@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Working agreement
 
-Read [collaboration-guidelines v4.3.0](https://github.com/Living-Proof-Labs/collaboration-guidelines/blob/v4.3.0/AGENTS.md)
+Read [collaboration-guidelines v6.0.0](https://github.com/Living-Proof-Labs/collaboration-guidelines/blob/v6.0.0/AGENTS.md)
 and relevant procedures at that tag before work. The inspected tag resolves to
-583ada2c1cd7cfc9832678316c401b801e8a9f6f.
+52a2f274576dab20e96ee1152b6c8d187cfbf377.
 
 Keep this a small documentation directory. Manuals remain in their own repositories.
 Use Rivet's GitHub identity; never substitute another account.
