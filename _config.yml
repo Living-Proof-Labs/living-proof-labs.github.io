@@ -8,5 +8,4 @@ exclude:
   - AGENTS.md
   - README.md
   - LICENSE.md
-  - LICENSES
   - tools

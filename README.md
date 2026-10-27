@@ -25,6 +25,18 @@ attach a Pages domain. Announce the branded URL only after live validation.
 
 ## Validation
 
+For a local build with Ruby 3.3.6 and Jekyll 3.10.0 (the native Pages Jekyll
+series), install the Markdown parser and build:
+
+```sh
+gem install jekyll -v 3.10.0 --no-document
+gem install kramdown-parser-gfm -v 1.1.0 --no-document
+jekyll build
+```
+
+Use an isolated Ruby environment or container; the Pages service manages its own
+dependencies. These commands are a local preview, not a replacement deployment.
+
 After building with Jekyll, run `python3 tools/check_site.py _site`. The checker
 validates local files and fragments while treating `/livingproof/` as an external
 project route. Run `python3 tools/check_site.py _site --live` to request that route
