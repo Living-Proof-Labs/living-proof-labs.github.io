@@ -43,7 +43,10 @@ def main():
         'index.html': ['living-proof-labs-documentation', 'livingproof', 'published-manuals',
                        'project-directory', 'help-improve-the-documentation', 'version-and-source'],
         'vision.html': ['helping-robots-help-humans', 'from-a-requirement-to-the-next-improvement',
-                        'what-goes-in-what-comes-out', 'see-it-today'],
+                        'what-goes-in-what-comes-out', 'see-it-today', 'glossary'],
+        'quickstart.html': ['quickstart'],
+        'guides.html': ['guides-by-role'],
+        'roadmap.html': ['available-now', 'building'],
     }
     for name, anchors in required.items():
         page = pages.get(root / name)

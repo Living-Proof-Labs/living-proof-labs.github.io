@@ -40,10 +40,14 @@ markdown_extensions:
 extra_css:
   - assets/landing.css
 nav:
-  - Start here: index.md
-  - Vision and terminology: vision.md
-  - Manual directory: index.html#published-manuals
-  - Contribute: contribute.md
-  - Contributor tasks: tasks.md
-  - Version and source: source.md
-  - License: license.md
+  - Overview: index.md
+  - Quickstart: quickstart.md
+  - Concepts: vision.md
+  - Guides by role: guides.md
+  - Reference: index.html#published-manuals
+  - Roadmap: roadmap.md
+  - Contribute:
+      - How to contribute: contribute.md
+      - Contributor tasks: tasks.md
+      - Version and source: source.md
+      - License: license.md

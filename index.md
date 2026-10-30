@@ -14,6 +14,9 @@ the evidence behind its assessment, and a useful next step.
 **Living Proof Labs is building that connection.**
 </div>
 
+[Start the quickstart](quickstart.md){ .md-button .md-button--primary }
+[Learn the concepts](vision.md){ .md-button }
+
 A software change can alter what a robot does. We want developers to ask
 *“Does it still pause when asked—and under which conditions?”* and follow the
 answer from versioned software through a repeatable scenario to an explainable
@@ -22,19 +25,19 @@ it, not leave them with an unexplained score.
 
 <div class="reading-paths" markdown>
 <div markdown>
-### Understand the vision
-Follow the [requirement-to-improvement loop](vision.html), with a shared vocabulary
-for specifications, evidence, assessments and policy.
+### Run the demo
+The [quickstart](quickstart.md) takes you from a fresh clone to a rendered report
+using recorded fixture data.
 </div>
 <div markdown>
-### Explore what works today
-Start with [recorded fixture examples](vision.html#see-it-today). Inspect how the
-same observation can meet one requirement and fail another.
+### Learn the concepts
+Follow the [requirement-to-improvement loop](vision.html) and the
+[glossary](vision.html#glossary) of specifications, evidence, assessments and policy.
 </div>
 <div markdown>
 ### Find your part
-Choose a [project manual](#published-manuals) for commands, contracts, execution,
-reporting or contribution. Each project owns its technical detail.
+Pick a [guide for your role](guides.md), or a [project manual](#published-manuals)
+for commands, contracts, execution, reporting or contribution.
 </div>
 </div>
 
@@ -55,11 +58,10 @@ and [learn what a grade does—and does not—mean](vision.html#evaluation-is-no
 
 !!! info "Current scope"
     Today, versioned specifications, deterministic fixtures, recorded/mock
-    assessments and portable reports demonstrate parts of this loop. A standalone
-    MuJoCo example exercises a native simulation engine. Connected simulation
-    verification, physical-robot execution, live evaluator providers and automated
-    diagnosis-to-code workflows remain integration work. Reports do not certify
-    safety, and an engine demonstration is not evidence of an integrated pipeline.
+    assessments and portable reports demonstrate parts of this loop. Simulation,
+    physical-robot execution, live evaluators and automated diagnosis remain
+    integration work, and reports do not certify safety. See the
+    [roadmap](roadmap.md) for what is available now and what we are building.
 
 Search on this site covers this introduction and its local reference pages.
 Open a project's manual to search that project's documentation.
@@ -68,34 +70,23 @@ Open a project's manual to search that project's documentation.
 
 ## Published manuals
 
-Each manual is independently published. Its documentation source revision may
-be newer than its package release; check Version and source before installation.
+<a id="project-directory"></a>
 
-| Rendered manual | Scope |
-| --- | --- |
-| [LivingProof](https://docs.livingprooflabs.com/livingproof/) | Command entry point and installed plugins |
-| [Capability reporter](https://docs.livingprooflabs.com/livingproof-capability-report/) | Bundle validation, policy grading and reports |
-| [Capability verifier](https://docs.livingprooflabs.com/capability-verifier/) | Fixture execution and portable evidence |
-| [Robot capability specifications](https://docs.livingprooflabs.com/robot-capability-specs/) | Requirements, conditions and acceptance criteria |
-| [Common library](https://docs.livingprooflabs.com/livingproof-common/) | Shared library interfaces |
-| [MuJoCo simulator](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | Standalone native engine example; no capability-pipeline integration implied |
-| [Collaboration guidelines](https://docs.livingprooflabs.com/collaboration-guidelines/) | Shared contribution and engineering standards |
+One row per project. Each manual is independently published; its documentation
+source revision may be newer than its package release, so check its Version and
+source page before installation. A repository without a manual is listed for
+completeness, not as an available integration.
 
-## Project directory
-
-These links open the current project repositories. A repository listing does not
-mean that a hosted manual or a planned integration is available.
-
-| Project | Find here |
-| --- | --- |
-| [LivingProof](https://github.com/Living-Proof-Labs/livingproof) | Command-line entry point |
-| [Capability report](https://github.com/Living-Proof-Labs/livingproof-capability-report) | Capability reporting |
-| [Capability verifier](https://github.com/Living-Proof-Labs/capability-verifier) | Verification tools |
-| [Robot capability specifications](https://github.com/Living-Proof-Labs/robot-capability-specs) | Capability specifications |
-| [Shared library](https://github.com/Living-Proof-Labs/livingproof-common) | Shared package support |
-| [MuJoCo simulator](https://github.com/Living-Proof-Labs/livingproof-sim-mujoco) | Simulator project |
-| [Unitree Foxglove SDK](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | Robot and visualization project |
-| [Collaboration guidelines](https://github.com/Living-Proof-Labs/collaboration-guidelines) | Contributor guidance |
+| Project | Manual | Repository | Scope |
+| --- | --- | --- | --- |
+| LivingProof | [Manual](https://docs.livingprooflabs.com/livingproof/) | [livingproof](https://github.com/Living-Proof-Labs/livingproof) | Command entry point and installed plugins |
+| Capability reporter | [Manual](https://docs.livingprooflabs.com/livingproof-capability-report/) | [livingproof-capability-report](https://github.com/Living-Proof-Labs/livingproof-capability-report) | Bundle validation, policy grading and reports |
+| Capability verifier | [Manual](https://docs.livingprooflabs.com/capability-verifier/) | [capability-verifier](https://github.com/Living-Proof-Labs/capability-verifier) | Fixture execution and portable evidence |
+| Robot capability specifications | [Manual](https://docs.livingprooflabs.com/robot-capability-specs/) | [robot-capability-specs](https://github.com/Living-Proof-Labs/robot-capability-specs) | Requirements, conditions and acceptance criteria |
+| Common library | [Manual](https://docs.livingprooflabs.com/livingproof-common/) | [livingproof-common](https://github.com/Living-Proof-Labs/livingproof-common) | Shared library interfaces |
+| MuJoCo simulator | [Manual](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | [livingproof-sim-mujoco](https://github.com/Living-Proof-Labs/livingproof-sim-mujoco) | Standalone native engine example; no capability-pipeline integration implied |
+| Collaboration guidelines | [Manual](https://docs.livingprooflabs.com/collaboration-guidelines/) | [collaboration-guidelines](https://github.com/Living-Proof-Labs/collaboration-guidelines) | Shared contribution and engineering standards |
+| Unitree Foxglove SDK | No hosted manual | [unitree-foxglove-sdk](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | Robot and visualization project |
 
 ## Help improve the documentation
 

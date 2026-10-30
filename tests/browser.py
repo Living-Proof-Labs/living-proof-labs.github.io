@@ -97,14 +97,14 @@ class BrowserTests(unittest.TestCase):
                 self.page.reload()
                 self.page.locator('label.md-header__button[for="__drawer"]').first.click()
                 expect(self.page.locator('#__drawer')).to_be_checked()
-                link = self.page.locator('.md-nav--primary').get_by_role('link', name='Vision and terminology', exact=True)
+                link = self.page.locator('.md-nav--primary').get_by_role('link', name='Concepts', exact=True)
                 expect(link).to_be_in_viewport()
                 link.click()
                 self.page.wait_for_url('**/vision.html')
             self.page.screenshot(path=str(ARTIFACTS / f'navigation-{width}.png'), full_page=True)
 
     def test_directory_identity_tasks_and_license(self):
-        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
+        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(8)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')
@@ -114,6 +114,22 @@ class BrowserTests(unittest.TestCase):
         self.page.goto(self.base + '/vision.html')
         expect(self.page.locator('article')).to_contain_text('License: Apache-2.0')
         expect(self.page.locator('article')).to_contain_text('not proof of root cause')
+        terms = self.page.locator('#glossary').locator('xpath=following::table[1]//tbody/tr/td[1]').all_inner_texts()
+        for term in ('Capability', 'Specification', 'Scenario', 'Fixture', 'Evidence',
+                     'Assessment', 'Policy', 'Grade', 'Report'):
+            self.assertIn(term, terms)
+
+    def test_task_navigation_and_quickstart(self):
+        nav = self.page.locator('.md-nav--primary')
+        for name in ('Overview', 'Quickstart', 'Concepts', 'Guides by role', 'Reference',
+                     'Roadmap', 'Contribute'):
+            expect(nav.get_by_text(name, exact=True).first).to_have_count(1)
+        cta = self.page.locator('article a.md-button--primary')
+        expect(cta).to_have_attribute('href', 'quickstart.html')
+        cta.click()
+        self.page.wait_for_url('**/quickstart.html')
+        expect(self.page.locator('article')).to_contain_text('task demo')
+        expect(self.page.locator('article')).to_contain_text('report.html')
 
 
 class Results(unittest.TextTestResult):
