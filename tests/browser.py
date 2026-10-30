@@ -104,7 +104,7 @@ class BrowserTests(unittest.TestCase):
             self.page.screenshot(path=str(ARTIFACTS / f'navigation-{width}.png'), full_page=True)
 
     def test_directory_identity_tasks_and_license(self):
-        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
+        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(8)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')
