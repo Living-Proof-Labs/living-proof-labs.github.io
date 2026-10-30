@@ -1,0 +1,90 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Brand alignment with livingprooflabs.com (website styles/main.css on main): DM Sans body,
+   Instrument Serif headings, teal accent with #0f766e for light-mode text. */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap");
+
+:root {
+  --md-text-font: "DM Sans";
+  --lpl-serif: "Instrument Serif", Georgia, serif;
+}
+
+/* Named brand tokens (values from livingprooflabs.com styles/main.css).
+   Theme variables below point at these, so a manual can retheme by changing only --lpl-*. */
+[data-md-color-scheme="default"] {
+  --lpl-accent: #0f766e;
+  --lpl-accent-hover: #115e59;
+  --lpl-on-accent: #ffffff;
+  --lpl-bg: #f8fafc;
+  --lpl-text: #0f172a;
+  --lpl-text-muted: #475569;
+  --lpl-accent-tint: rgba(15, 118, 110, 0.1);
+}
+
+[data-md-color-scheme="slate"] {
+  --lpl-accent: #2dd4bf;
+  --lpl-accent-hover: #5eead4;
+  --lpl-on-accent: #042f2e;
+  --lpl-bg: #0b1120;
+  --lpl-text: #e2e8f0;
+  --lpl-text-muted: #94a3b8;
+  --lpl-accent-tint: rgba(45, 212, 191, 0.12);
+}
+
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-default-fg-color: var(--lpl-text);
+  --md-default-bg-color: var(--lpl-bg);
+  --md-primary-fg-color: var(--lpl-accent);
+  --md-primary-fg-color--light: var(--lpl-accent);
+  --md-primary-fg-color--dark: var(--lpl-accent-hover);
+  --md-primary-bg-color: var(--lpl-on-accent);
+  --md-accent-fg-color: var(--lpl-accent-hover);
+  --md-accent-fg-color--transparent: var(--lpl-accent-tint);
+  --md-typeset-a-color: var(--lpl-accent);
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-family: var(--lpl-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.md-header__button.md-logo .lpl-logo {
+  width: 1.7rem;
+  color: var(--lpl-accent);
+  height: auto;
+}
+
+/* Heading permalinks (¶) use the website's muted text color so they meet contrast. */
+.md-typeset .headerlink {
+  color: var(--lpl-text-muted);
+}
+
+.md-typeset .headerlink:hover,
+.md-typeset .headerlink:focus-visible,
+.md-typeset :target > .headerlink {
+  color: var(--lpl-accent);
+}
+
+/* Keep the robot mark beside the title at every width (the theme hides it below 76.25em).
+   On narrow screens the menu button stays first, then the mark, then the title. */
+@media screen and (max-width: 76.234375em) {
+  .md-header__button.md-logo {
+    display: inline-block;
+    padding: 0.3rem 0.15rem;
+    margin: 0.2rem 0;
+  }
+
+  .md-header__button.md-logo .lpl-logo {
+    width: 1.5rem;
+  }
+
+  .md-header__inner > label.md-header__button[for="__drawer"] {
+    order: -1;
+  }
+
+  .md-header__title {
+    margin-left: 0.3rem;
+  }
+}
