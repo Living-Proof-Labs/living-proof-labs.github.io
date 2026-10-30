@@ -42,6 +42,7 @@ def main():
     shutil.copytree(ROOT / 'LICENSES', source / 'LICENSES')
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
+    shutil.copyfile(ROOT / 'docs/report-example.png', source / 'assets/report-example.png')
     tasks = json.loads(command('task', '--list', '--json'))['tasks']
     lines = ['# Contributor tasks', '',
              'Generated from the reviewed Taskfile using `task --list --json` and',
@@ -78,8 +79,11 @@ search other projects' manuals. Their deployments and evidence remain independen
         license_name = 'Apache-2.0' if page.name == 'vision.md' else 'CC-BY-4.0'
         text = page.read_text()
         # Keep the page title first and make documentation identity visible without scripts.
-        pos = text.find('\n', text.find('# '))
-        text = text[:pos] + f'\n\n<div class="docs-identity" markdown>[{identity}]({source_url}) · [Version and source](source.md)</div>\n' + text[pos:]
+        # The landing page carries it in its "Version and source" footer instead (issue #8).
+        badge = f'\n\n<div class="docs-identity" markdown>[{identity}]({source_url}) · [Version and source](source.md)</div>\n'
+        anchor = '\n## Version and source\n' if page.name == 'index.md' else None
+        pos = text.find(anchor) + len(anchor) - 1 if anchor and anchor in text else text.find('\n', text.find('# '))
+        text = text[:pos] + badge + text[pos:]
         text += f'\n---\n\n[Documentation home](https://docs.livingprooflabs.com/) · [Source]({source_url}) · [Help / report an issue](https://github.com/Living-Proof-Labs/living-proof-labs.github.io/issues) · [License: {license_name}](license.md)\n'
         page.write_text(text)
     config = yaml.safe_load((ROOT / 'docs/mkdocs.yml').read_text())
