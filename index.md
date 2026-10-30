@@ -14,7 +14,7 @@ run them repeatably, and get a traceable report, not an unexplained score.
 </div>
 
 <div class="hero-actions" markdown>
-[Run the 5-minute demo](quickstart.md){ .md-button .md-button--primary }
+[Run the demo (under a minute)](quickstart.md){ .md-button .md-button--primary }
 [See an example report](quickstart.html#3-open-a-rendered-report){ .md-button }
 [Talk to us about a design partnership](https://livingprooflabs.com/#contact){ .hero-tertiary }
 </div>
