@@ -3,6 +3,7 @@
 import functools
 import http.server
 import os
+import shutil
 from pathlib import Path
 import threading
 import time
@@ -20,6 +21,21 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def chromium_path():
+    """CHROMIUM_PATH if set, else /usr/bin/chromium, else a Chrome or Chromium on PATH."""
+    if os.environ.get('CHROMIUM_PATH'):
+        return os.environ['CHROMIUM_PATH']
+    if os.path.exists('/usr/bin/chromium'):
+        return '/usr/bin/chromium'
+    for name in ('google-chrome', 'google-chrome-stable', 'chromium'):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise SystemExit('No Chromium found: set CHROMIUM_PATH, or install chromium or '
+                     'google-chrome (checked /usr/bin/chromium and PATH for google-chrome, '
+                     'google-chrome-stable, chromium).')
+
+
 class BrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -30,7 +46,7 @@ class BrowserTests(unittest.TestCase):
         cls.base = f'http://127.0.0.1:{cls.server.server_port}'
         cls.playwright = sync_playwright().start()
         cls.browser = cls.playwright.chromium.launch(
-            executable_path=os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium'),
+            executable_path=chromium_path(),
             args=['--no-sandbox'], headless=True)
 
     @classmethod
