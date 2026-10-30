@@ -1,0 +1,45 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Brand alignment with livingprooflabs.com (website styles/main.css on main): DM Sans body,
+   Instrument Serif headings, teal accent with #0f766e for light-mode text. */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap");
+
+:root {
+  --md-text-font: "DM Sans";
+  --lpl-serif: "Instrument Serif", Georgia, serif;
+}
+
+[data-md-color-scheme="default"] {
+  --md-default-fg-color: #0f172a;
+  --md-default-bg-color: #f8fafc;
+  --md-primary-fg-color: #0f766e;
+  --md-primary-fg-color--light: #0d9488;
+  --md-primary-fg-color--dark: #115e59;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.82);
+  --md-accent-fg-color: #115e59;
+  --md-typeset-a-color: #0f766e;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0b1120;
+  --md-primary-fg-color: #2dd4bf;
+  --md-primary-fg-color--light: #5eead4;
+  --md-primary-fg-color--dark: #14b8a6;
+  --md-primary-bg-color: #042f2e;
+  --md-primary-bg-color--light: rgba(4, 47, 46, 0.8);
+  --md-accent-fg-color: #5eead4;
+  --md-typeset-a-color: #2dd4bf;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-family: var(--lpl-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.md-header__button.md-logo .lpl-logo {
+  width: 1.7rem;
+  color: var(--md-typeset-a-color);
+  height: auto;
+}
