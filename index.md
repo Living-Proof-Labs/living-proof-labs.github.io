@@ -55,8 +55,8 @@ and [learn what a grade does—and does not—mean](vision.html#evaluation-is-no
 
 !!! info "Current scope"
     Today, versioned specifications, deterministic fixtures, recorded/mock
-    assessments and portable reports demonstrate parts of this loop. A standalone
-    MuJoCo example exercises a native simulation engine. Connected simulation
+    assessments and portable reports demonstrate parts of this loop. Standalone
+    MuJoCo and Gazebo examples exercise native simulation engines. Connected simulation
     verification, physical-robot execution, live evaluator providers and automated
     diagnosis-to-code workflows remain integration work. Reports do not certify
     safety, and an engine demonstration is not evidence of an integrated pipeline.
@@ -79,6 +79,7 @@ be newer than its package release; check Version and source before installation.
 | [Robot capability specifications](https://docs.livingprooflabs.com/robot-capability-specs/) | Requirements, conditions and acceptance criteria |
 | [Common library](https://docs.livingprooflabs.com/livingproof-common/) | Shared library interfaces |
 | [MuJoCo simulator](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | Standalone native engine example; no capability-pipeline integration implied |
+| [Gazebo simulator](https://github.com/Living-Proof-Labs/livingproof-sim-gazebo) (repository; manual coming) | Standalone native engine example; no capability-pipeline integration implied |
 | [Collaboration guidelines](https://docs.livingprooflabs.com/collaboration-guidelines/) | Shared contribution and engineering standards |
 
 ## Project directory
@@ -94,6 +95,7 @@ mean that a hosted manual or a planned integration is available.
 | [Robot capability specifications](https://github.com/Living-Proof-Labs/robot-capability-specs) | Capability specifications |
 | [Shared library](https://github.com/Living-Proof-Labs/livingproof-common) | Shared package support |
 | [MuJoCo simulator](https://github.com/Living-Proof-Labs/livingproof-sim-mujoco) | Simulator project |
+| [Gazebo simulator](https://github.com/Living-Proof-Labs/livingproof-sim-gazebo) | Simulator project |
 | [Unitree Foxglove SDK](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | Robot and visualization project |
 | [Collaboration guidelines](https://github.com/Living-Proof-Labs/collaboration-guidelines) | Contributor guidance |
 
