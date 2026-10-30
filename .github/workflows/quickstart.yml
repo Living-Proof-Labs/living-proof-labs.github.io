@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Runs quickstart.md exactly as written (tools/run_quickstart.py executes its sh blocks).
+name: Quickstart
+
+on:
+  pull_request:
+    paths:
+      - quickstart.md
+      - tools/run_quickstart.py
+      - .github/workflows/quickstart.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Task 3.54.0
+        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: 3.54.0
+      - name: Show prerequisites
+        run: |
+          git --version
+          docker version --format 'Docker {{.Server.Version}}'
+          docker compose version
+          task --version
+      - name: Run the quickstart from a fresh directory
+        run: python3 tools/run_quickstart.py "$RUNNER_TEMP/quickstart"
+      - name: Keep the demo results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quickstart-results
+          path: |
+            ${{ runner.temp }}/quickstart/capability-verifier/artifacts/demo.xml
+            ${{ runner.temp }}/quickstart/baseline/report.html
+          if-no-files-found: ignore
+          retention-days: 14

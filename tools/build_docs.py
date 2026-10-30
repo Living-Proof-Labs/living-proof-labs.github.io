@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / '.build'
 SITE = ROOT / 'artifacts/site'
 SOURCES = {'index.md': 'index.md', 'vision.md': 'vision.md',
-           'contribute.md': 'contribute.md', 'LICENSE.md': 'license.md'}
+           'contribute.md': 'contribute.md', 'LICENSE.md': 'license.md',
+           'quickstart.md': 'quickstart.md', 'guides.md': 'guides.md', 'roadmap.md': 'roadmap.md'}
 
 
 def command(*args):

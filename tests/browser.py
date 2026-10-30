@@ -3,6 +3,7 @@
 import functools
 import http.server
 import os
+import shutil
 from pathlib import Path
 import threading
 import time
@@ -20,6 +21,21 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def chromium_path():
+    """CHROMIUM_PATH if set, else /usr/bin/chromium, else a Chrome or Chromium on PATH."""
+    if os.environ.get('CHROMIUM_PATH'):
+        return os.environ['CHROMIUM_PATH']
+    if os.path.exists('/usr/bin/chromium'):
+        return '/usr/bin/chromium'
+    for name in ('google-chrome', 'google-chrome-stable', 'chromium'):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise SystemExit('No Chromium found: set CHROMIUM_PATH, or install chromium or '
+                     'google-chrome (checked /usr/bin/chromium and PATH for google-chrome, '
+                     'google-chrome-stable, chromium).')
+
+
 class BrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -30,7 +46,7 @@ class BrowserTests(unittest.TestCase):
         cls.base = f'http://127.0.0.1:{cls.server.server_port}'
         cls.playwright = sync_playwright().start()
         cls.browser = cls.playwright.chromium.launch(
-            executable_path=os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium'),
+            executable_path=chromium_path(),
             args=['--no-sandbox'], headless=True)
 
     @classmethod
@@ -97,14 +113,14 @@ class BrowserTests(unittest.TestCase):
                 self.page.reload()
                 self.page.locator('label.md-header__button[for="__drawer"]').first.click()
                 expect(self.page.locator('#__drawer')).to_be_checked()
-                link = self.page.locator('.md-nav--primary').get_by_role('link', name='Vision and terminology', exact=True)
+                link = self.page.locator('.md-nav--primary').get_by_role('link', name='Concepts', exact=True)
                 expect(link).to_be_in_viewport()
                 link.click()
                 self.page.wait_for_url('**/vision.html')
             self.page.screenshot(path=str(ARTIFACTS / f'navigation-{width}.png'), full_page=True)
 
     def test_directory_identity_tasks_and_license(self):
-        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
+        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(8)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')
@@ -114,6 +130,30 @@ class BrowserTests(unittest.TestCase):
         self.page.goto(self.base + '/vision.html')
         expect(self.page.locator('article')).to_contain_text('License: Apache-2.0')
         expect(self.page.locator('article')).to_contain_text('not proof of root cause')
+        terms = self.page.locator('#glossary').locator('xpath=following::table[1]//tbody/tr/td[1]').all_inner_texts()
+        for term in ('Capability', 'Specification', 'Scenario', 'Fixture', 'Evidence',
+                     'Assessment', 'Policy', 'Grade', 'Report'):
+            self.assertIn(term, terms)
+
+    def test_task_navigation_and_quickstart(self):
+        nav = self.page.locator('.md-nav--primary')
+        for name in ('Overview', 'Quickstart', 'Concepts', 'Guides by role', 'Reference',
+                     'Roadmap', 'Contribute'):
+            expect(nav.get_by_text(name, exact=True).first).to_have_count(1)
+        cta = self.page.locator('article a.md-button--primary')
+        expect(cta).to_have_attribute('href', 'quickstart.html')
+        cta.click()
+        self.page.wait_for_url('**/quickstart.html')
+        expect(self.page.locator('article')).to_contain_text('task demo')
+        expect(self.page.locator('article')).to_contain_text('report.html')
+        self.page.set_viewport_size({'width': 390, 'height': 900})
+        self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+        self.page.goto(self.base + '/vision.html')
+        expect(self.page.locator('.glossary td').first).to_have_css('display', 'block')
+        expect(self.page.locator('.on-this-page a[href="#glossary"]')).to_be_visible()
+        self.page.goto(self.base + '/index.html')
+        expect(self.page.locator('.project-table td:nth-child(2)').first).to_be_hidden()
+        expect(self.page.locator('.project-table td:nth-child(1) a').first).to_be_visible()
 
 
 class Results(unittest.TextTestResult):

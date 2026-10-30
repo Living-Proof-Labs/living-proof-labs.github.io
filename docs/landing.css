@@ -5,3 +5,18 @@
 .md-typeset .reading-paths h3 { margin-top: 0; }
 .md-typeset pre > code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .md-typeset .docs-identity { font-size: .72rem; color: var(--md-default-fg-color--light); }
+
+.md-typeset .on-this-page { font-size: .85em; line-height: 1.8; }
+
+/* Narrow screens: glossary rows stack as term, meaning, muted example. */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .glossary table:not([class]) { display: block; border: 0; }
+  .md-typeset .glossary thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .md-typeset .glossary tbody, .md-typeset .glossary tr, .md-typeset .glossary td { display: block; }
+  .md-typeset .glossary tr { padding: .6rem 0; border-top: 1px solid var(--md-default-fg-color--lightest); }
+  .md-typeset .glossary table:not([class]) td { padding: .1rem .2rem; border: 0; }
+  .md-typeset .glossary td:last-child { color: var(--md-default-fg-color--light); font-size: .9em; }
+  .md-typeset .glossary td:last-child::before { content: "Example: "; font-weight: 600; }
+  /* Manuals table: the Project cell already links to the manual, so drop the duplicate column. */
+  .md-typeset .project-table th:nth-child(2), .md-typeset .project-table td:nth-child(2) { display: none; }
+}

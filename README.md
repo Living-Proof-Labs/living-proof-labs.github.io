@@ -3,10 +3,12 @@
 
 **[Start here: documentation](https://docs.livingprooflabs.com/)**
 
-The organization introduction, vision and seven-manual directory. Each product
+The organization introduction, quickstart, concepts glossary, guides by role,
+roadmap and project reference. Each product
 owns its own manual and deployment. This root uses Zensical for local search,
 responsive navigation and light/dark/system appearance; search does not index
-other repositories. Edit `index.md`, `vision.md` and `contribute.md`; generated
+other repositories. Edit `index.md`, `quickstart.md`, `vision.md` (Concepts), `guides.md`,
+`roadmap.md` and `contribute.md`; generated
 Task reference and source identity are not separate authored sources.
 
 ## Build and review
