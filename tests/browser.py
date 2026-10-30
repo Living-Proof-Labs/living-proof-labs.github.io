@@ -121,8 +121,24 @@ class BrowserTests(unittest.TestCase):
 
     def test_directory_identity_tasks_and_license(self):
         expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(8)
-        expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
-        self.assertIn('current scope', self.page.locator('article').inner_text().lower())
+        identity = self.page.locator('.docs-identity')
+        expect(identity).to_have_count(1)
+        expect(identity).to_contain_text('Docs: development')
+        # Issue #8: the build line sits in the Version and source footer, not above the headline.
+        self.assertTrue(self.page.evaluate('''() => {
+            const id = document.querySelector('.docs-identity'), h1 = document.querySelector('article h1'),
+                  vs = document.getElementById('version-and-source');
+            return !!(h1.compareDocumentPosition(id) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+                   !!(vs.compareDocumentPosition(id) & Node.DOCUMENT_POSITION_FOLLOWING);
+        }'''))
+        self.assertIn('not safety certification', self.page.locator('article').inner_text())
+        for width in (1280, 390):
+            self.page.set_viewport_size({'width': width, 'height': 844 if width == 390 else 800})
+            self.page.goto(self.base + '/index.html')
+            expect(self.page.locator('article h1')).to_contain_text('Prove what your robot can do, every software version.')
+            for sel in ('article h1', '.lead', '.hero-actions a.md-button--primary'):
+                expect(self.page.locator(sel)).to_be_in_viewport()
+        self.page.set_viewport_size({'width': 1280, 'height': 800})
         self.page.goto(self.base + '/tasks.html')
         for name in ('setup', 'build', 'check', 'test', 'verify'):
             expect(self.page.locator('#' + name)).to_have_count(1)

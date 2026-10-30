@@ -20,3 +20,18 @@
   /* Manuals table: the Project cell already links to the manual, so drop the duplicate column. */
   .md-typeset .project-table th:nth-child(2), .md-typeset .project-table td:nth-child(2) { display: none; }
 }
+
+/* Landing page (issue #8). */
+.md-typeset .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin: 1.2rem 0; }
+.md-typeset .hero-actions .md-button { margin: 0; }
+.md-typeset .hero-tertiary { font-weight: 600; }
+.md-typeset .hero-report { margin: 1.5rem 0 0; max-width: 40rem; }
+.md-typeset .hero-report img { border: 1px solid var(--md-default-fg-color--lightest); border-radius: .5rem; }
+.md-typeset .hero-report figcaption { font-size: .8em; color: var(--md-default-fg-color--light); }
+.md-typeset .how-steps, .md-typeset .now-building { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap: 1rem; margin: 1rem 0; }
+.md-typeset .how-steps > div, .md-typeset .now-building > div { border: 1px solid var(--md-default-fg-color--lightest); border-radius: .6rem; padding: .9rem 1rem; }
+.md-typeset .how-steps h3 { margin-top: 0; font-size: 1em; }
+.md-typeset .now-building ul { margin-top: .5rem; }
+.md-typeset .badge { display: inline-block; font-size: .75em; font-weight: 700; padding: .15rem .55rem; border-radius: 999px; }
+.md-typeset .badge-now { background: #d1fae5; color: #065f46; }
+.md-typeset .badge-building { background: #fef3c7; color: #78350f; }
