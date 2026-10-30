@@ -6,7 +6,7 @@ title: Quickstart
 
 # Quickstart
 
-*About 5 minutes once Docker images are cached; the first build takes longer.*
+*Under a minute once Docker images are cached; the first build takes longer.*
 
 !!! tip "No Docker?"
     [Skip to step 3](#3-open-a-rendered-report) to open a real report in under a minute.
@@ -60,12 +60,25 @@ verdicts you should expect:
 !!! note "If the build stops at `apt-get update`"
     The first build installs Debian packages from `deb.debian.org`. Networks or
     proxies that block that host make the build fail at this step, before any
-    test runs. Retry from a network that can reach it.
+    test runs. Capability verifier v1.0.1 has no `APT_MIRROR` option or other
+    setting to change the mirror. Retry from a network that can reach
+    `deb.debian.org`, or, in a scratch copy you will not commit, point apt at an
+    HTTPS mirror such as `https://cloudfront.debian.net` before it runs:
+
+    ```bash
+    # In a throwaway clone only; this edits the verifier's Dockerfile.
+    sed -i 's#RUN apt-get update#RUN sed -i "s|http://deb.debian.org|https://cloudfront.debian.net|g" /etc/apt/sources.list.d/debian.sources \&\& apt-get update#' Dockerfile
+    task demo
+    ```
+
+    A run built this way is a local diagnostic, not the documented Quickstart.
 
 ## 3. Open a rendered report
 
-The demo prints JSON. To see the report a person reads, download a released
-example bundle and open its `report.html`. You do not need Docker for this step.
+The demo prints JSON. To see the report a person reads, download a published
+example bundle and open its `report.html`. This bundle comes from the
+capability verifier v1.3.0 release; it is not the output of the demo you just
+ran. You do not need Docker for this step.
 
 ```sh
 # Release that publishes the example bundles

@@ -43,6 +43,10 @@ def main():
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
     shutil.copyfile(ROOT / 'docs/report-example.png', source / 'assets/report-example.png')
+    shutil.copyfile(ROOT / 'docs/brand.css', source / 'assets/brand.css')
+    shutil.copyfile(ROOT / 'docs/favicon.svg', source / 'assets/favicon.svg')
+    shutil.rmtree(STAGE / 'overrides', ignore_errors=True)
+    shutil.copytree(ROOT / 'docs/overrides', STAGE / 'overrides')
     tasks = json.loads(command('task', '--list', '--json'))['tasks']
     lines = ['# Contributor tasks', '',
              'Generated from the reviewed Taskfile using `task --list --json` and',

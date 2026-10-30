@@ -32,6 +32,28 @@ Keep organization vision here and product instructions with their owner.
 Preserve existing URLs and anchors. Keep current behavior, evidence limitations
 and planned integrations explicit. Check a new manual live before listing it.
 
+## Apply the shared look to a project manual
+
+Each project manual has its own Zensical configuration, so the brand is not
+inherited automatically. To make a manual match livingprooflabs.com and this
+site, its owner can copy three files from this repository and change that
+project's `mkdocs.yml` only:
+
+1. Copy [`docs/brand.css`](https://github.com/Living-Proof-Labs/living-proof-labs.github.io/blob/main/docs/brand.css)
+   into the manual's docs directory (for example `docs/assets/brand.css`) and
+   list it under `extra_css`.
+2. Copy [`docs/favicon.svg`](https://github.com/Living-Proof-Labs/living-proof-labs.github.io/blob/main/docs/favicon.svg)
+   next to it and set `theme.favicon` to its path.
+3. Copy [`docs/overrides/partials/logo.html`](https://github.com/Living-Proof-Labs/living-proof-labs.github.io/blob/main/docs/overrides/partials/logo.html)
+   into the manual's theme override directory (`theme.custom_dir`; create one if
+   the manual has none) so the header shows the robot-face logo.
+4. Add `primary: custom` and `accent: custom` to every `theme.palette` entry so
+   the teal colors apply in light and dark mode.
+5. Add a link back to the website, for example
+   `copyright: '<a href="https://livingprooflabs.com/">Back to livingprooflabs.com</a>'`.
+
+Keep `theme.font: false`; `brand.css` loads DM Sans and Instrument Serif itself.
+
 ## Licensing and help
 
 See [license scopes](license.md) before reusing content. The adapted vision retains
