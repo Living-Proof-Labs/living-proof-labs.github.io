@@ -4,10 +4,13 @@ site_description: From robot capability requirements to evidence and the next im
 site_url: https://docs.livingprooflabs.com/
 repo_url: https://github.com/Living-Proof-Labs/living-proof-labs.github.io
 repo_name: Source
+copyright: '© Living Proof Labs, LLC · <a href="https://livingprooflabs.com/">Back to livingprooflabs.com</a>'
 use_directory_urls: false
 strict: true
 theme:
   name: zensical
+  custom_dir: overrides
+  favicon: assets/favicon.svg
   font: false
   features:
     - navigation.expand
@@ -16,16 +19,22 @@ theme:
     - search.highlight
   palette:
     - media: '(prefers-color-scheme)'
+      primary: custom
+      accent: custom
       toggle:
         icon: lucide/sun-moon
         name: Switch to light mode
     - media: '(prefers-color-scheme: light)'
       scheme: default
+      primary: custom
+      accent: custom
       toggle:
         icon: lucide/sun
         name: Switch to dark mode
     - media: '(prefers-color-scheme: dark)'
       scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: lucide/moon
         name: Switch to system preference
@@ -38,6 +47,7 @@ markdown_extensions:
       permalink: true
   - pymdownx.superfences
 extra_css:
+  - assets/brand.css
   - assets/landing.css
 nav:
   - Start here: index.md
@@ -47,3 +57,4 @@ nav:
   - Contributor tasks: tasks.md
   - Version and source: source.md
   - License: license.md
+  - livingprooflabs.com ↗: https://livingprooflabs.com/
