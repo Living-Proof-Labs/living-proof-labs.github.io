@@ -77,16 +77,20 @@ source revision may be newer than its package release, so check its Version and
 source page before installation. A repository without a manual is listed for
 completeness, not as an available integration.
 
+<div class="project-table" markdown>
+
 | Project | Manual | Repository | Scope |
 | --- | --- | --- | --- |
-| LivingProof | [Manual](https://docs.livingprooflabs.com/livingproof/) | [livingproof](https://github.com/Living-Proof-Labs/livingproof) | Command entry point and installed plugins |
-| Capability reporter | [Manual](https://docs.livingprooflabs.com/livingproof-capability-report/) | [livingproof-capability-report](https://github.com/Living-Proof-Labs/livingproof-capability-report) | Bundle validation, policy grading and reports |
-| Capability verifier | [Manual](https://docs.livingprooflabs.com/capability-verifier/) | [capability-verifier](https://github.com/Living-Proof-Labs/capability-verifier) | Fixture execution and portable evidence |
-| Robot capability specifications | [Manual](https://docs.livingprooflabs.com/robot-capability-specs/) | [robot-capability-specs](https://github.com/Living-Proof-Labs/robot-capability-specs) | Requirements, conditions and acceptance criteria |
-| Common library | [Manual](https://docs.livingprooflabs.com/livingproof-common/) | [livingproof-common](https://github.com/Living-Proof-Labs/livingproof-common) | Shared library interfaces |
-| MuJoCo simulator | [Manual](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | [livingproof-sim-mujoco](https://github.com/Living-Proof-Labs/livingproof-sim-mujoco) | Standalone native engine example; no capability-pipeline integration implied |
-| Collaboration guidelines | [Manual](https://docs.livingprooflabs.com/collaboration-guidelines/) | [collaboration-guidelines](https://github.com/Living-Proof-Labs/collaboration-guidelines) | Shared contribution and engineering standards |
-| Unitree Foxglove SDK | No hosted manual | [unitree-foxglove-sdk](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | Robot and visualization project |
+| [LivingProof](https://docs.livingprooflabs.com/livingproof/) | [Manual](https://docs.livingprooflabs.com/livingproof/) | [livingproof](https://github.com/Living-Proof-Labs/livingproof) | Command entry point and installed plugins |
+| [Capability reporter](https://docs.livingprooflabs.com/livingproof-capability-report/) | [Manual](https://docs.livingprooflabs.com/livingproof-capability-report/) | [livingproof-capability-report](https://github.com/Living-Proof-Labs/livingproof-capability-report) | Bundle validation, policy grading and reports |
+| [Capability verifier](https://docs.livingprooflabs.com/capability-verifier/) | [Manual](https://docs.livingprooflabs.com/capability-verifier/) | [capability-verifier](https://github.com/Living-Proof-Labs/capability-verifier) | Fixture execution and portable evidence |
+| [Robot capability specifications](https://docs.livingprooflabs.com/robot-capability-specs/) | [Manual](https://docs.livingprooflabs.com/robot-capability-specs/) | [robot-capability-specs](https://github.com/Living-Proof-Labs/robot-capability-specs) | Requirements, conditions and acceptance criteria |
+| [Common library](https://docs.livingprooflabs.com/livingproof-common/) | [Manual](https://docs.livingprooflabs.com/livingproof-common/) | [livingproof-common](https://github.com/Living-Proof-Labs/livingproof-common) | Shared library interfaces |
+| [MuJoCo simulator](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | [Manual](https://docs.livingprooflabs.com/livingproof-sim-mujoco/) | [livingproof-sim-mujoco](https://github.com/Living-Proof-Labs/livingproof-sim-mujoco) | Standalone native engine example; no capability-pipeline integration implied |
+| [Collaboration guidelines](https://docs.livingprooflabs.com/collaboration-guidelines/) | [Manual](https://docs.livingprooflabs.com/collaboration-guidelines/) | [collaboration-guidelines](https://github.com/Living-Proof-Labs/collaboration-guidelines) | Shared contribution and engineering standards |
+| [Unitree Foxglove SDK](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | No hosted manual | [unitree-foxglove-sdk](https://github.com/Living-Proof-Labs/unitree-foxglove-sdk) | Robot and visualization project; no hosted manual |
+
+</div>
 
 ## Help improve the documentation
 

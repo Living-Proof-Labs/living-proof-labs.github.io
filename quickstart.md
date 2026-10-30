@@ -6,10 +6,18 @@ title: Quickstart
 
 # Quickstart
 
+*About 5 minutes once Docker images are cached; the first build takes longer.*
+
+!!! tip "No Docker?"
+    [Skip to step 3](#3-open-a-rendered-report) to open a real report in under a minute.
+
 Go from a fresh clone to a passing demo, then open a rendered report. This page
 wraps the [capability verifier v1.0.1 quickstart](https://github.com/Living-Proof-Labs/capability-verifier/tree/v1.0.1#quickstart);
 that manual owns the details. Everything here uses recorded fixture data: no
 robot, simulator, model call or live human review is involved.
+
+<!-- The sh blocks below are run verbatim, in order, by tools/run_quickstart.py
+     (used by .github/workflows/quickstart.yml). Keep them runnable. -->
 
 ## 1. Install the prerequisites
 
@@ -45,7 +53,7 @@ verdicts you should expect:
 | --- | --- | --- |
 | Valid pause in 120 ms | `PASS` | The requirement is met |
 | Motion not inhibited; other evaluators favorable | `FAIL` | The failure is detected, not averaged away |
-| Elapsed time missing | `INSUFFICIENT_EVIDENCE` | Missing data never passes silently |
+| Elapsed time missing | <code>INSUFFICIENT_<wbr>EVIDENCE</code> | Missing data never passes silently |
 
 `artifacts/demo.xml` keeps each full report as a JUnit property.
 
@@ -60,15 +68,23 @@ The demo prints JSON. To see the report a person reads, download a released
 example bundle and open its `report.html`. You do not need Docker for this step.
 
 ```sh
-B=https://github.com/Living-Proof-Labs/capability-verifier/releases/download/v1.3.0
-Z=capability-verifier-v1.3.0-baseline-22ce11f3-4bbe-5ee8-b0cf-a357ad5e41a8-amd64-40284818922-1.zip
-curl -fsSLO "$B/$Z"
-curl -fsSLO "$B/BUNDLE-SHA256SUMS"
+# Release that publishes the example bundles
+BASE=https://github.com/Living-Proof-Labs/capability-verifier/releases/download/v1.3.0
+# The baseline (passing) example bundle
+BUNDLE=capability-verifier-v1.3.0-baseline-22ce11f3-4bbe-5ee8-b0cf-a357ad5e41a8-amd64-40284818922-1.zip
+
+# Download the bundle and the published checksums
+curl -fsSLO "$BASE/$BUNDLE"
+curl -fsSLO "$BASE/BUNDLE-SHA256SUMS"
+
+# Check the download; this prints "...zip: OK"
 sha256sum --check --ignore-missing BUNDLE-SHA256SUMS
-unzip -q "$Z" -d baseline
+
+# Unpack into ./baseline
+unzip -q "$BUNDLE" -d baseline
 ```
 
-The checksum line should end in `OK`. Open `baseline/report.html` in a browser.
+On macOS, use `shasum -a 256 --check --ignore-missing BUNDLE-SHA256SUMS`. Open `baseline/report.html` in a browser.
 It shows one result, `PASS`, under the `all-required-v1` policy, with the reason
 "All required assessments pass with verified evidence". The same folder holds
 `report.txt`, `report.json` and `report.csv`, plus the manifest, evidence,

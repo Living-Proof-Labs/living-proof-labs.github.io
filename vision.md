@@ -15,6 +15,17 @@ license: Apache-2.0
     physical-robot execution and live evaluator integrations are future work.
     The workflow below describes both the implemented pieces and the direction.
 
+**On this page:**
+[Glossary](#glossary) ·
+[From a requirement to the next improvement](#from-a-requirement-to-the-next-improvement) ·
+[Start with the software under test](#start-with-the-software-under-test) ·
+[Simulation and eventual hardware](#simulation-and-eventual-hardware) ·
+[Evaluation is not diagnosis](#evaluation-is-not-diagnosis) ·
+[From logs to the next software change](#from-logs-to-the-next-software-change) ·
+[What goes in, what comes out](#what-goes-in-what-comes-out) ·
+[See it today](#see-it-today)
+{ .on-this-page }
+
 Robots earn our confidence through what they can do, under conditions we can
 understand. **Living Proof Labs is building an open way to connect robot capability
 requirements, observed behavior, and evidence people can inspect.**
@@ -27,6 +38,8 @@ requirement to a run, its evidence, and a useful next step.
 
 <!-- Draft wording for review by Aaron (issue #9). -->
 
+<div class="glossary" markdown>
+
 | Term | Plain meaning | Example |
 | --- | --- | --- |
 | **Capability** | Something a robot should be able to do, stated so that it can be checked. | Pausing when asked. |
@@ -38,6 +51,8 @@ requirement to a run, its evidence, and a useful next step.
 | **Policy** | The versioned rule that combines assessments into a grade. | `all-required-v1`: any failing required assessment makes the grade FAIL, and a missing assessment gives INSUFFICIENT_EVIDENCE. |
 | **Grade** | The outcome the policy produces. It says whether this evidence met this requirement; it is not a safety certification or an explanation of why. | PASS, FAIL or INSUFFICIENT_EVIDENCE. |
 | **Report** | The record people and tools read. It traces the grade back to the specification, evidence, assessments and policy, and opening it again does not change the grade. | `report.html` in a downloaded example bundle. |
+
+</div>
 
 The [quickstart](quickstart.md) produces each of these. The loop below shows how
 they connect.

@@ -130,6 +130,14 @@ class BrowserTests(unittest.TestCase):
         self.page.wait_for_url('**/quickstart.html')
         expect(self.page.locator('article')).to_contain_text('task demo')
         expect(self.page.locator('article')).to_contain_text('report.html')
+        self.page.set_viewport_size({'width': 390, 'height': 900})
+        self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+        self.page.goto(self.base + '/vision.html')
+        expect(self.page.locator('.glossary td').first).to_have_css('display', 'block')
+        expect(self.page.locator('.on-this-page a[href="#glossary"]')).to_be_visible()
+        self.page.goto(self.base + '/index.html')
+        expect(self.page.locator('.project-table td:nth-child(2)').first).to_be_hidden()
+        expect(self.page.locator('.project-table td:nth-child(1) a').first).to_be_visible()
 
 
 class Results(unittest.TextTestResult):
