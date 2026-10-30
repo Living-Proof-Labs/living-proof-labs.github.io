@@ -18,6 +18,8 @@
   --md-primary-bg-color--light: rgba(255, 255, 255, 0.82);
   --md-accent-fg-color: #115e59;
   --md-typeset-a-color: #0f766e;
+  --md-accent-fg-color--transparent: rgba(15, 118, 110, 0.1);
+  --lpl-text-muted: #475569;
 }
 
 [data-md-color-scheme="slate"] {
@@ -29,6 +31,8 @@
   --md-primary-bg-color--light: rgba(4, 47, 46, 0.8);
   --md-accent-fg-color: #5eead4;
   --md-typeset-a-color: #2dd4bf;
+  --md-accent-fg-color--transparent: rgba(45, 212, 191, 0.12);
+  --lpl-text-muted: #94a3b8;
 }
 
 .md-typeset h1,
@@ -42,4 +46,9 @@
   width: 1.7rem;
   color: var(--md-typeset-a-color);
   height: auto;
+}
+
+/* Heading permalinks (¶) use the website's muted text color so they meet contrast. */
+.md-typeset .headerlink {
+  color: var(--lpl-text-muted);
 }
