@@ -91,6 +91,23 @@ def main():
             failures.append('Architecture is missing from the search index')
     except (OSError, ValueError) as error:
         failures.append(f'Unreadable search index: {error}')
+    mermaid_pages = 0
+    for path in pages:
+        text = path.read_text()
+        # A ```mermaid fence that reached the page as highlighted code was not rendered.
+        if 'language-mermaid' in text or '<span class="filename">mermaid' in text:
+            failures.append(f'{path.relative_to(root)}: Mermaid block rendered as a literal code block')
+        if '<pre class="mermaid">' in text:
+            mermaid_pages += 1
+            if 'assets/vendor/mermaid/mermaid-12.2.0.min.js"></script>' not in text:
+                failures.append(f'{path.relative_to(root)}: diagrams without the vendored Mermaid')
+            if '%%{init' in text:
+                failures.append(f'{path.relative_to(root)}: Mermaid init directive overrides site themes')
+    arch = root / 'architecture/verification-architecture.html'
+    if arch in pages and arch.read_text().count('<pre class="mermaid">') < 2:
+        failures.append('architecture: expected its two Mermaid diagrams')
+    if not mermaid_pages:
+        failures.append('No page carries a Mermaid diagram; the renderer is untested')
     for path, page in pages.items():
         for href in page.links:
             url = urlsplit(href)

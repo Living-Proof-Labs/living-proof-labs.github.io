@@ -9,6 +9,9 @@ Original layout, styles, configuration and tooling (`_layouts/`, `assets/`,
 `Dockerfile`, `Taskfile.yml`, `pyproject.toml`, `uv.lock`, `docs/`) and reusable code examples in documentation are licensed
 under [Apache License 2.0](LICENSES/Apache-2.0.txt).
 
+`docs/vendor/mermaid/mermaid-12.2.0.min.js` is unmodified Mermaid 12.2.0 under its
+own [MIT license](docs/vendor/mermaid/LICENSE).
+
 Attribution: Living Proof Labs. These licenses do not grant trademark rights or
 change the licenses of linked projects or third-party dependencies.
 
