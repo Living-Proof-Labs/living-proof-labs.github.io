@@ -63,6 +63,21 @@ class BrowserTests(unittest.TestCase):
         expect(self.page.locator('dialog a')).to_have_count(0)
         self.page.keyboard.press('Escape')
 
+    def test_architecture_from_homepage_search_and_redirect(self):
+        self.page.locator('article a[href$="architecture/verification-architecture.html"]').first.click()
+        self.page.wait_for_url('**/architecture/verification-architecture.html')
+        expect(self.page.locator('.docs-identity')).to_contain_text('content ')
+        expect(self.page.locator('.md-nav--primary').get_by_role('link', name='Verification architecture', exact=True)).to_have_count(1)
+        self.page.goto(self.base + '/')
+        self.page.locator('.md-search__button').click()
+        self.page.get_by_role('combobox', name='Search').fill('verification architecture')
+        result = self.page.locator('dialog a[href*="architecture/verification-architecture.html"]').first
+        expect(result).to_be_visible()
+        result.click()
+        self.page.wait_for_url('**/architecture/verification-architecture.html*')
+        self.page.goto(self.base + '/architecture.html')
+        self.page.wait_for_url('**/architecture/verification-architecture.html')
+
     def test_palette_persists_and_follows_system(self):
         self.page.locator('label[for="__palette_1"]').click()
         self.page.locator('label[for="__palette_2"]').click()
@@ -106,6 +121,7 @@ class BrowserTests(unittest.TestCase):
     def test_directory_identity_tasks_and_license(self):
         expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
+        expect(self.page.locator('.docs-identity')).to_contain_text('publisher ')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')
         for name in ('setup', 'build', 'check', 'test', 'verify'):

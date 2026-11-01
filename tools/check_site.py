@@ -52,11 +52,45 @@ def main():
                 failures.append(f'Missing historical route/anchor: {name}#{anchor}')
     try:
         identity = json.loads((root / 'build.json').read_text())
-        assert len(identity['source_commit']) == 40
-        for name in ['index.html', 'vision.html', 'tasks.html', 'source.html']:
-            assert identity['source_commit'] in (root / name).read_text(), name
+        publisher, content = identity['publisher'], identity['content']
+        assert len(publisher['commit']) == 40 and publisher['commit'] == identity['source_commit']
+        assert len(content['commit']) == 40, 'content commit'
+        assert content['repository'] == 'Living-Proof-Labs/.github', 'content repository'
+        for name in identity['pages']:
+            text = (root / name).read_text()
+            for role, commit in (('publisher', publisher['commit']), ('content', content['commit'])):
+                assert commit[:7] in text, f'{name} does not show the {role} revision'
+        source = (root / 'source.html').read_text()
+        assert publisher['commit'] in source and content['commit'] in source, 'source.html revisions'
     except (OSError, ValueError, KeyError, AssertionError) as error:
+        identity = {}
         failures.append(f'Invalid or inconsistent build identity: {error}')
+    for name in identity.get('pages', []):
+        if root / name not in pages:
+            failures.append(f'Missing declared page: {name}')
+    for old, target in identity.get('redirects', {}).items():
+        page = root / old
+        if not page.is_file():
+            failures.append(f'Missing redirect page: {old}')
+        elif not (root / target).is_file():
+            failures.append(f'Redirect {old} points to missing page {target}')
+        elif 'http-equiv="refresh"' not in page.read_text():
+            failures.append(f'Redirect {old} does not redirect')
+    architecture = 'architecture/verification-architecture.html'
+    home = pages.get(root / 'index.html')
+    if home is None or not any(urlsplit(h).path.lstrip('./') == architecture for h in home.links):
+        failures.append('Architecture is not linked from the documentation homepage')
+    home_text = (root / 'index.html').read_text() if home else ''
+    nav = home_text[home_text.find('md-nav--primary'):]
+    if architecture not in nav:
+        failures.append('Architecture is missing from the primary navigation')
+    try:
+        search = json.loads((root / 'search.json').read_text())
+        items = search.get('items') or search.get('docs') or []
+        if not any(str(item.get('location', '')).startswith(architecture) for item in items):
+            failures.append('Architecture is missing from the search index')
+    except (OSError, ValueError) as error:
+        failures.append(f'Unreadable search index: {error}')
     for path, page in pages.items():
         for href in page.links:
             url = urlsplit(href)
@@ -76,9 +110,9 @@ def main():
             if target.is_dir():
                 target /= "index.html"
             if not target.is_file():
-                failures.append(f"{path.name}: missing {href}")
+                failures.append(f"{path.relative_to(root)}: missing {href}")
             elif url.fragment and target in pages and unquote(url.fragment) not in pages[target].ids:
-                failures.append(f"{path.name}: missing fragment {href}")
+                failures.append(f"{path.relative_to(root)}: missing fragment {href}")
     if args.live:
         for url in sorted(external):
             try:

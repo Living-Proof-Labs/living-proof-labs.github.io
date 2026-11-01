@@ -11,14 +11,16 @@ Use a draft pull request and independent agent review before merge.
 
 ## Bounded exceptions
 
-The root is a documentation-only Zensical site. Repository Markdown stays canonical;
-Task generates the contributor reference from actual commands. Docker supplies the
+The root is a documentation-only Zensical site that publishes a pinned revision of
+the organization pages authored in Living-Proof-Labs/.github (`docs/site.json`).
+Do not add or edit organization content here; change it in .github, then move
+`content.lock.json` to the merged commit. Task generates the contributor reference from actual commands. Docker supplies the
 locked build/browser environment; CI uses those tasks and publishes only the
 verified artifact. Do not add application packaging or automated releases for this
 editorial site. Local search covers only the root pages, not remote manuals.
 
 Preserve /vision.html, root section fragments and license-file URLs. Keep the
-legacy Jekyll layout/configuration available for documented rollback; Actions is
+legacy Jekyll layout/configuration (it no longer carries page sources); Actions is
 the selected publication route after candidate acceptance and the explicit Pages
 source transition. Revisit this exception if application behavior is introduced.
 

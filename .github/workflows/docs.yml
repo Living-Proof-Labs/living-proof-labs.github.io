@@ -16,6 +16,23 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Read the pinned organization content revision
+        id: content
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, re
+          lock = json.load(open('content.lock.json'))
+          assert lock['repository'] == 'Living-Proof-Labs/.github'
+          assert re.fullmatch(r'[0-9a-f]{40}', lock['commit'])
+          print(f"repository={lock['repository']}")
+          print(f"commit={lock['commit']}")
+          PY
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ steps.content.outputs.repository }}
+          ref: ${{ steps.content.outputs.commit }}
+          path: .content
+          persist-credentials: false
       - name: Build locked documentation environment
         run: docker build --target development -t root-docs .
       - name: Build and verify candidate without network access
@@ -87,6 +104,9 @@ jobs:
           p = json.load(open('verified/site/build.json'))
           assert p['source_commit'] == os.environ['GITHUB_SHA']
           assert p['source_dirty'] is False
+          assert p['publisher']['commit'] == os.environ['GITHUB_SHA']
+          assert p['content']['pinned'] is True and p['content']['dirty'] is False
+          assert p['content']['commit'] == p['content']['locked_commit']
           PY
           tar --dereference --hard-dereference -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -5,12 +5,16 @@ tasks:
     desc: Install the locked documentation and browser tooling
     cmds:
       - uv sync --locked --no-python-downloads
+  content:
+    desc: Fetch the .github content revision pinned in content.lock.json into .content
+    cmds:
+      - python3 tools/fetch_content.py
   build:
-    desc: Build the root manual from repository Markdown and actual Task help
+    desc: Publish the pinned .github organization pages with actual Task help
     cmds:
       - uv run --locked --no-sync python tools/build_docs.py
   check:
-    desc: Validate generated local links, historical anchors and source identity
+    desc: Validate pages, links, fragments, redirects, navigation, search and both source revisions
     cmds:
       - uv run --locked --no-sync python tools/check_site.py artifacts/site
   test:
