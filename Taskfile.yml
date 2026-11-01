@@ -9,6 +9,10 @@ tasks:
     desc: Fetch the .github content revision pinned in content.lock.json into .content
     cmds:
       - python3 tools/fetch_content.py
+  content:pin:
+    desc: Fail unless the pinned .github commit is reachable from .github main (needs network)
+    cmds:
+      - python3 tools/check_content_pin.py
   build:
     desc: Publish the pinned .github organization pages with actual Task help
     cmds:
@@ -20,6 +24,7 @@ tasks:
   test:
     desc: Exercise generated navigation, search and theme controls in Chromium
     cmds:
+      - uv run --locked --no-sync python -m unittest tests/test_content_pin.py
       - uv run --locked --no-sync python tests/browser.py
   verify:
     desc: Build and verify the delivered documentation artifact

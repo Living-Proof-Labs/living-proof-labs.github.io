@@ -32,7 +32,12 @@ jobs:
           repository: ${{ steps.content.outputs.repository }}
           ref: ${{ steps.content.outputs.commit }}
           path: .content
+          fetch-depth: 0
           persist-credentials: false
+      - name: Require the pinned content commit to be merged into .github main
+        env:
+          CONTENT_MAIN_REF: refs/remotes/origin/main
+        run: python3 tools/check_content_pin.py .content
       - name: Build locked documentation environment
         run: docker build --target development -t root-docs .
       - name: Build and verify candidate without network access
