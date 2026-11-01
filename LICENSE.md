@@ -4,8 +4,7 @@
 Original written documentation (`*.md`) is licensed under
 [Creative Commons Attribution 4.0 International](LICENSES/CC-BY-4.0.txt).
 
-Original layout, styles, configuration and tooling (`_layouts/`, `assets/`,
-`_config.yml`, `.gitignore`, `tools/`, `tests/`, `.github/`, `.devcontainer/`,
+Original layout, styles, configuration and tooling (`.gitignore`, `tools/`, `tests/`, `.github/`, `.devcontainer/`,
 `Dockerfile`, `Taskfile.yml`, `pyproject.toml`, `uv.lock`, `docs/`) and reusable code examples in documentation are licensed
 under [Apache License 2.0](LICENSES/Apache-2.0.txt).
 
