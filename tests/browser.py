@@ -120,15 +120,20 @@ class BrowserTests(unittest.TestCase):
 
     def test_mermaid_renders_on_desktop_and_mobile_in_light_and_dark(self):
         errors, external = [], []
-        self.page.on('console', lambda m: m.type == 'error' and errors.append(m.text))
-        self.page.on('pageerror', lambda e: errors.append(str(e)))
-        # Offline proof that the vendored release renders: any non-local request fails.
+        allowed = ('https://fonts.googleapis.com/', 'https://fonts.gstatic.com/', 'https://api.github.com/')
+        self.page.on('console', lambda m: m.type == 'error' and errors.append(
+            (m.text, (m.location or {}).get('url', ''))))
+        self.page.on('pageerror', lambda e: errors.append((str(e), '')))
+        # Offline proof that the vendored release renders: no request ever leaves the box.
+        # Every non-local request is answered here with an empty 204, so the result does not
+        # depend on whether the host has a network (Chromium reports ERR_FAILED for an abort
+        # but ERR_INTERNET_DISCONNECTED under docker --network none).
         def guard(route):
             if route.request.url.startswith(self.base):
                 route.continue_()
             else:
                 external.append(route.request.url)
-                route.abort()
+                route.fulfill(status=204, body='')
         self.page.route('**/*', guard)
         # Zensical attaches each rendered diagram in a closed shadow root. Open it for the
         # test only, so the assertions can read the SVG Mermaid produced.
@@ -169,11 +174,12 @@ class BrowserTests(unittest.TestCase):
                 self.page.locator('.mermaid').first.screenshot(
                     path=str(ARTIFACTS / f'mermaid-{width}-{scheme}.png'))
                 self.page.screenshot(path=str(ARTIFACTS / f'mermaid-page-{width}-{scheme}.png'), full_page=True)
-        # The site's existing font and GitHub-release widget requests are aborted here as
-        # they are in the offline CI container; their load failures are the only allowed
-        # console errors. Mermaid itself must come from the site, never a CDN.
-        self.assertEqual([e for e in errors if 'net::ERR_FAILED' not in e], [])
-        allowed = ('https://fonts.googleapis.com/', 'https://api.github.com/')
+        # Only the site's font and GitHub-release widget may reach outward (answered with 204
+        # above); a network failure is tolerated only for those origins, under either code.
+        # Mermaid itself must come from the site, never a CDN.
+        net = ('net::ERR_FAILED', 'net::ERR_INTERNET_DISCONNECTED')
+        self.assertEqual([t for t, url in errors
+                          if not (url.startswith(allowed) and any(c in t for c in net))], [])
         self.assertEqual([u for u in external if not u.startswith(allowed)], [])
 
     def test_directory_identity_tasks_and_license(self):
