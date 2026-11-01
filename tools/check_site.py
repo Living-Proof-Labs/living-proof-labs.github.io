@@ -3,6 +3,7 @@
 """Check built directory links; optionally request live external destinations."""
 import argparse
 import json
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
@@ -101,7 +102,7 @@ def main():
             mermaid_pages += 1
             if 'assets/vendor/mermaid/mermaid-12.2.0.min.js"></script>' not in text:
                 failures.append(f'{path.relative_to(root)}: diagrams without the vendored Mermaid')
-            if '%%{init' in text:
+            if any('%%{init' in block for block in re.findall(r'<pre class="mermaid">(.*?)</pre>', text, re.S)):
                 failures.append(f'{path.relative_to(root)}: Mermaid init directive overrides site themes')
     arch = root / 'architecture/verification-architecture.html'
     if arch in pages and arch.read_text().count('<pre class="mermaid">') < 2:

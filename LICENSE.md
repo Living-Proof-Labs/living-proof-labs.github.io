@@ -10,7 +10,7 @@ Original layout, styles, configuration and tooling (`_layouts/`, `assets/`,
 under [Apache License 2.0](LICENSES/Apache-2.0.txt).
 
 `docs/vendor/mermaid/mermaid-12.2.0.min.js` is unmodified Mermaid 12.2.0 under its
-own [MIT license](docs/vendor/mermaid/LICENSE).
+own [MIT license](https://github.com/Living-Proof-Labs/living-proof-labs.github.io/blob/main/docs/vendor/mermaid/LICENSE).
 
 Attribution: Living Proof Labs. These licenses do not grant trademark rights or
 change the licenses of linked projects or third-party dependencies.
