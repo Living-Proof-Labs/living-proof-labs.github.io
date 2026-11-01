@@ -142,19 +142,28 @@ class BrowserTests(unittest.TestCase):
                 self.page.goto(self.base + '/architecture/verification-architecture.html')
                 expect(self.page.locator('body')).to_have_attribute('data-md-color-scheme', palette)
                 diagrams = self.page.locator('.mermaid svg')
-                expect(diagrams).to_have_count(2, timeout=20000)
+                expect(diagrams).to_have_count(3, timeout=20000)
                 expect(self.page.locator('pre.mermaid')).to_have_count(0)
-                expect(self.page.locator('div.mermaid')).to_have_count(2)
+                expect(self.page.locator('div.mermaid')).to_have_count(3)
                 expect(self.page.locator('div.mermaid').get_by_text('Syntax error')).to_have_count(0)
                 expect(self.page.locator('.mermaid .error-icon')).to_have_count(0)
                 first = diagrams.first
-                for label in ('Verification consumer', 'capability-verifier', 'Robot repositories'):
+                for label in ('Verification consumer', 'capability-verifier', 'capability-report'):
                     expect(first.get_by_text(label).first).to_be_visible()
                 self.assertTrue(self.page.evaluate('typeof mermaid === "object"'))
-                for i in range(2):
+                for i in range(3):
                     box = diagrams.nth(i).bounding_box()
                     self.assertGreater(box['height'], 40)
                     self.assertLessEqual(box['x'] + box['width'], width + 1)
+                # Effective label size: computed font size times the SVG's scale to fit.
+                sizes = self.page.evaluate('''() => [...document.querySelectorAll('div.mermaid')].map(d => {
+                    const svg = d.shadowRoot.querySelector('svg');
+                    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+                    return Math.min(...[...svg.querySelectorAll('.nodeLabel, .edgeLabel span, text')]
+                        .filter(e => e.textContent.trim())
+                        .map(e => parseFloat(getComputedStyle(e).fontSize) * scale)); })''')
+                print(f'mermaid labels {width}px {scheme}: ' + ', '.join(f'{s:.1f}px' for s in sizes))
+                self.assertTrue(all(s >= 12 for s in sizes), f'labels below 12 px at {width}: {sizes}')
                 self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
                 diagrams.first.scroll_into_view_if_needed()
                 self.page.locator('.mermaid').first.screenshot(

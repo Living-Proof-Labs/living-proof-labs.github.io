@@ -105,8 +105,8 @@ def main():
             if any('%%{init' in block for block in re.findall(r'<pre class="mermaid">(.*?)</pre>', text, re.S)):
                 failures.append(f'{path.relative_to(root)}: Mermaid init directive overrides site themes')
     arch = root / 'architecture/verification-architecture.html'
-    if arch in pages and arch.read_text().count('<pre class="mermaid">') < 2:
-        failures.append('architecture: expected its two Mermaid diagrams')
+    if arch in pages and arch.read_text().count('<pre class="mermaid">') < 3:
+        failures.append('architecture: expected its three Mermaid diagrams')
     if not mermaid_pages:
         failures.append('No page carries a Mermaid diagram; the renderer is untested')
     for path, page in pages.items():
