@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTENT_REPOSITORY = 'Living-Proof-Labs/.github'
 
 
 def reachable(repo, commit, main_ref):
@@ -19,9 +20,21 @@ def reachable(repo, commit, main_ref):
                           cwd=repo).returncode == 0
 
 
-def main(argv):
-    lock = json.loads((ROOT / 'content.lock.json').read_text())
-    repo = Path(argv[1] if len(argv) > 1 else os.environ.get('CONTENT_DIR') or ROOT / '.content')
+def repository_error(lock):
+    """Why the lock's repository is not the content repository, or None."""
+    if lock.get('repository') != CONTENT_REPOSITORY:
+        return (f'FAIL: content.lock.json pins {lock.get("repository")!r}; '
+                f'only {CONTENT_REPOSITORY} content may be published')
+    return None
+
+
+def main(argv, root=ROOT):
+    lock = json.loads((root / 'content.lock.json').read_text())
+    error = repository_error(lock)
+    if error:
+        print(error)
+        return 1
+    repo = Path(argv[1] if len(argv) > 1 else os.environ.get('CONTENT_DIR') or root / '.content')
     main_ref = os.environ.get('CONTENT_MAIN_REF')
     if not main_ref:
         url = os.environ.get('CONTENT_URL') or f'https://github.com/{lock["repository"]}.git'
