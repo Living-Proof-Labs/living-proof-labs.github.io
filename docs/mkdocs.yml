@@ -45,7 +45,14 @@ markdown_extensions:
   - md_in_html
   - toc:
       permalink: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      # Zensical 0.0.73 renders ```mermaid fences as diagrams. It would load Mermaid 12 from
+      # unpkg; tools/build_docs.py loads the vendored 12.2.0 (docs/vendor/mermaid) first. It
+      # resolves the format from this string, so the file stays plain YAML (no !!python tag).
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: pymdownx.superfences.fence_code_format
 extra_css:
   - assets/brand.css
   - assets/landing.css
