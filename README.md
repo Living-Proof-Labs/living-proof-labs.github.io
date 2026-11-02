@@ -46,6 +46,16 @@ exists, local links, assets and fragments resolve, redirects point to existing
 pages, architecture is in navigation and the search index, and both revisions
 appear on every page.
 
+## Diagrams
+
+Fenced `mermaid` blocks in the published pages render as diagrams with the
+vendored Mermaid 12.2.0 in [`docs/vendor/mermaid`](docs/vendor/mermaid/README.md),
+loaded only on pages that have diagrams; nothing is fetched from a CDN. The
+authoring guidance lives with the content, in `.github` `docs/contribute.md`.
+`task check` fails if a block is left as code or a diagram page lacks the vendored
+script; `task test` renders the architecture diagrams at desktop and phone widths in
+light and dark, and saves `artifacts/mermaid-*.png`.
+
 ## Publication
 
 Selected route: **Pages → Build and deployment → Source: GitHub Actions**.

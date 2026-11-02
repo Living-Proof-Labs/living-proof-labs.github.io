@@ -26,6 +26,7 @@ STAGE = ROOT / '.build'
 SITE = ROOT / 'artifacts/site'
 PUBLISHER = 'Living-Proof-Labs/living-proof-labs.github.io'
 LOCK = ROOT / 'content.lock.json'
+MERMAID = 'mermaid-12.2.0.min.js'
 LICENSE_PAGE = {'LICENSE.md': 'license.md'}
 
 
@@ -139,6 +140,7 @@ def main():
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
     shutil.copyfile(ROOT / 'docs/brand.css', source / 'assets/brand.css')
     shutil.copyfile(ROOT / 'docs/favicon.svg', source / 'assets/favicon.svg')
+    shutil.copytree(ROOT / 'docs/vendor/mermaid', source / 'assets/vendor/mermaid')
     shutil.rmtree(STAGE / 'overrides', ignore_errors=True)
     shutil.copytree(ROOT / 'docs/overrides', STAGE / 'overrides')
     tasks = json.loads(command('task', '--list', '--json'))['tasks']
@@ -216,6 +218,14 @@ evidence remain independent.
         path = STAGE / 'site' / old
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(redirect_page(target, str(PurePosixPath(old).parent)))
+    for page in (STAGE / 'site').rglob('*.html'):
+        text = page.read_text()
+        if 'class="mermaid"' in text:
+            # Zensical uses a global `mermaid` when one exists instead of fetching unpkg,
+            # so diagram pages load the vendored, reviewed release before its bundle.
+            up = posixpath.relpath('.', posixpath.dirname(page.relative_to(STAGE / 'site').as_posix()) or '.')
+            src = ('' if up == '.' else up + '/') + 'assets/vendor/mermaid/' + MERMAID
+            page.write_text(text.replace('</head>', f'<script src="{src}"></script>\n</head>', 1))
     shutil.rmtree(SITE, ignore_errors=True)
     shutil.copytree(STAGE / 'site', SITE)
     (SITE / '.nojekyll').touch()

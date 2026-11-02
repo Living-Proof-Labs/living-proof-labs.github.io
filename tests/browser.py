@@ -118,6 +118,70 @@ class BrowserTests(unittest.TestCase):
                 self.page.wait_for_url('**/vision.html')
             self.page.screenshot(path=str(ARTIFACTS / f'navigation-{width}.png'), full_page=True)
 
+    def test_mermaid_renders_on_desktop_and_mobile_in_light_and_dark(self):
+        errors, external = [], []
+        allowed = ('https://fonts.googleapis.com/', 'https://fonts.gstatic.com/', 'https://api.github.com/')
+        self.page.on('console', lambda m: m.type == 'error' and errors.append(
+            (m.text, (m.location or {}).get('url', ''))))
+        self.page.on('pageerror', lambda e: errors.append((str(e), '')))
+        # Offline proof that the vendored release renders: no request ever leaves the box.
+        # Every non-local request is answered here with an empty 204, so the result does not
+        # depend on whether the host has a network (Chromium reports ERR_FAILED for an abort
+        # but ERR_INTERNET_DISCONNECTED under docker --network none).
+        def guard(route):
+            if route.request.url.startswith(self.base):
+                route.continue_()
+            else:
+                external.append(route.request.url)
+                route.fulfill(status=204, body='')
+        self.page.route('**/*', guard)
+        # Zensical attaches each rendered diagram in a closed shadow root. Open it for the
+        # test only, so the assertions can read the SVG Mermaid produced.
+        self.page.add_init_script('const attach = Element.prototype.attachShadow;'
+                                  'Element.prototype.attachShadow = function (init) {'
+                                  ' return attach.call(this, {...init, mode: "open"}); };')
+        for width, height in ((1440, 1000), (390, 844)):
+            for scheme, palette in (('light', 'default'), ('dark', 'slate')):
+                self.page.set_viewport_size({'width': width, 'height': height})
+                self.page.emulate_media(color_scheme=scheme)
+                self.page.goto(self.base + '/architecture/verification-architecture.html')
+                expect(self.page.locator('body')).to_have_attribute('data-md-color-scheme', palette)
+                diagrams = self.page.locator('.mermaid svg')
+                expect(diagrams).to_have_count(3, timeout=20000)
+                expect(self.page.locator('pre.mermaid')).to_have_count(0)
+                expect(self.page.locator('div.mermaid')).to_have_count(3)
+                expect(self.page.locator('div.mermaid').get_by_text('Syntax error')).to_have_count(0)
+                expect(self.page.locator('.mermaid .error-icon')).to_have_count(0)
+                first = diagrams.first
+                for label in ('Verification consumer', 'capability-verifier', 'capability-report'):
+                    expect(first.get_by_text(label).first).to_be_visible()
+                self.assertTrue(self.page.evaluate('typeof mermaid === "object"'))
+                for i in range(3):
+                    box = diagrams.nth(i).bounding_box()
+                    self.assertGreater(box['height'], 40)
+                    self.assertLessEqual(box['x'] + box['width'], width + 1)
+                # Effective label size: computed font size times the SVG's scale to fit.
+                sizes = self.page.evaluate('''() => [...document.querySelectorAll('div.mermaid')].map(d => {
+                    const svg = d.shadowRoot.querySelector('svg');
+                    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+                    return Math.min(...[...svg.querySelectorAll('.nodeLabel, .edgeLabel span, text')]
+                        .filter(e => e.textContent.trim())
+                        .map(e => parseFloat(getComputedStyle(e).fontSize) * scale)); })''')
+                print(f'mermaid labels {width}px {scheme}: ' + ', '.join(f'{s:.1f}px' for s in sizes))
+                self.assertTrue(all(s >= 12 for s in sizes), f'labels below 12 px at {width}: {sizes}')
+                self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+                diagrams.first.scroll_into_view_if_needed()
+                self.page.locator('.mermaid').first.screenshot(
+                    path=str(ARTIFACTS / f'mermaid-{width}-{scheme}.png'))
+                self.page.screenshot(path=str(ARTIFACTS / f'mermaid-page-{width}-{scheme}.png'), full_page=True)
+        # Only the site's font and GitHub-release widget may reach outward (answered with 204
+        # above); a network failure is tolerated only for those origins, under either code.
+        # Mermaid itself must come from the site, never a CDN.
+        net = ('net::ERR_FAILED', 'net::ERR_INTERNET_DISCONNECTED')
+        self.assertEqual([t for t, url in errors
+                          if not (url.startswith(allowed) and any(c in t for c in net))], [])
+        self.assertEqual([u for u in external if not u.startswith(allowed)], [])
+
     def test_directory_identity_tasks_and_license(self):
         expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
