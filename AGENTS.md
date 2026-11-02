@@ -19,10 +19,9 @@ locked build/browser environment; CI uses those tasks and publishes only the
 verified artifact. Do not add application packaging or automated releases for this
 editorial site. Local search covers only the root pages, not remote manuals.
 
-Preserve /vision.html, root section fragments and license-file URLs. Keep the
-legacy Jekyll layout/configuration (it no longer carries page sources); Actions is
-the selected publication route after candidate acceptance and the explicit Pages
-source transition. Revisit this exception if application behavior is introduced.
+Preserve /vision.html, root section fragments and license-file URLs. GitHub
+Actions is the only publication route; the legacy Jekyll fallback was removed
+because its page sources moved to .github. Revisit this exception if application behavior is introduced.
 
 Current repository directory links and the current hosted manual are intentional
 navigation exceptions to cross-repository version pinning. Keep shared guidance,

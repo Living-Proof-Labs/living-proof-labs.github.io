@@ -59,7 +59,8 @@ light and dark, and saves `artifacts/mermaid-*.png`.
 ## Publication
 
 Selected route: **Pages → Build and deployment → Source: GitHub Actions**.
-Switch from the original `main` / root branch source only after candidate review.
+Pages must already use GitHub Actions as its source before this merges; the branch
+source has no page content any more.
 The existing custom domain and DNS remain unchanged. `.github/workflows/docs.yml`
 builds PR previews with `contents: read`; only the separate trusted-main deploy
 job has `pages: write` and `id-token: write`. It checks freshness inside the
@@ -80,10 +81,10 @@ The full vision retains Apache-2.0 attribution; see [license scopes](LICENSE.md)
 
 A content rollback moves `content.lock.json` back to the last known-good `.github`
 commit through review and rebuilds. A publisher rollback reverts the PR here.
-The original `_config.yml`, `_layouts/` and `assets/style.css` remain, but the
-page sources are no longer in this repository, so the Jekyll branch fallback no
-longer serves content; it would need the pinned `.github` pages copied in first.
-Removing that fallback is a separate decision. This is a documented procedure,
+The legacy Jekyll fallback (`_config.yml`, `_layouts/`, `assets/style.css`) was
+removed: its page sources moved to `.github`, so it could no longer serve content.
+If Actions publication is unavailable, redeploy the last successful run's
+artifact; switching Pages back to branch publishing is no longer supported. This is a documented procedure,
 not a claim that rollback was executed.
 
 The [portal rollout issue](https://github.com/Living-Proof-Labs/.github/issues/3)
