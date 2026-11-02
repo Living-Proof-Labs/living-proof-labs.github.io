@@ -13,6 +13,19 @@ from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / 'artifacts'
+CONTENT = Path(os.environ.get('CONTENT_DIR') or ROOT / '.content').resolve()
+
+
+def first_table_rows(markdown):
+    """Data rows of the first Markdown table, so the content decides the count."""
+    lines = markdown.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith('|'))
+    rows = []
+    for line in lines[start:]:
+        if not line.startswith('|'):
+            break
+        rows.append(line)
+    return len(rows) - 2  # header and delimiter
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -183,7 +196,9 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual([u for u in external if not u.startswith(allowed)], [])
 
     def test_directory_identity_tasks_and_license(self):
-        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(7)
+        tasks = first_table_rows((CONTENT / 'docs' / 'index.md').read_text(encoding='utf-8'))
+        self.assertGreater(tasks, 0)
+        expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(tasks)
         expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
         expect(self.page.locator('.docs-identity')).to_contain_text('publisher ')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
