@@ -17,6 +17,7 @@ import posixpath
 import re
 import shutil
 import subprocess
+import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 
 import yaml
@@ -26,8 +27,30 @@ STAGE = ROOT / '.build'
 SITE = ROOT / 'artifacts/site'
 PUBLISHER = 'Living-Proof-Labs/living-proof-labs.github.io'
 LOCK = ROOT / 'content.lock.json'
+BRAND_LOCK = ROOT / 'docs-brand.lock.json'
 MERMAID = 'mermaid-12.2.0.min.js'
 LICENSE_PAGE = {'LICENSE.md': 'license.md'}
+
+
+def brand_css():
+    """Return the docs brand pinned in docs-brand.lock.json after checking its sha256.
+
+    The brand is owned by collaboration-guidelines brand/docs/. DOCS_BRAND_SOURCE may name a
+    local collaboration-guidelines checkout to read the pinned commit offline; the digest is
+    still enforced.
+    """
+    pin = json.loads(BRAND_LOCK.read_text())
+    local = os.environ.get('DOCS_BRAND_SOURCE')
+    if local:
+        data = subprocess.check_output(['git', '-C', local, 'show', f"{pin['commit']}:{pin['path']}"])
+    else:
+        url = f"https://raw.githubusercontent.com/{pin['repository']}/{pin['commit']}/{pin['path']}"
+        with urllib.request.urlopen(url, timeout=30) as response:
+            data = response.read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != pin['sha256']:
+        raise ValueError(f"Docs brand {pin['version']} sha256 is {digest}, pinned {pin['sha256']}")
+    return data
 
 
 def command(*args, cwd=ROOT):
@@ -138,7 +161,7 @@ def main():
     shutil.copytree(ROOT / 'LICENSES', source / 'LICENSES')
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
-    shutil.copyfile(ROOT / 'docs/brand.css', source / 'assets/brand.css')
+    (source / 'assets/brand.css').write_bytes(brand_css())
     shutil.copyfile(ROOT / 'docs/favicon.svg', source / 'assets/favicon.svg')
     shutil.copytree(ROOT / 'docs/vendor/mermaid', source / 'assets/vendor/mermaid')
     shutil.rmtree(STAGE / 'overrides', ignore_errors=True)
