@@ -8,8 +8,11 @@ content (overview, vision, verification architecture, contribution page and the
 manual/project directory) is authored in
 [Living-Proof-Labs/.github `docs/`](https://github.com/Living-Proof-Labs/.github/tree/main/docs)
 and declared in its `docs/site.json`. Edit content there, not here. This repository
-owns the theme, local search, navigation assembly, generated Task reference,
-redirects, link checks, source identity and deployment. Search covers only the
+owns the theme configuration, local search, navigation assembly, generated Task
+reference, redirects, link checks, source identity and deployment. The docs brand
+(colours, fonts, `brand.css`) is owned by
+[collaboration-guidelines `brand/docs/`](https://github.com/Living-Proof-Labs/collaboration-guidelines/tree/main/brand/docs);
+change it there, not here. Search covers only the
 published root pages, not other repositories' manuals.
 
 `content.lock.json` pins one full `.github` commit. A content change merges in
