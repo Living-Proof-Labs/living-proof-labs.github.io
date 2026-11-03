@@ -13,10 +13,16 @@ tasks:
     desc: Fail unless the pinned .github commit is reachable from .github main (needs network)
     cmds:
       - python3 tools/check_content_pin.py
+  brand:
+    desc: Fetch the docs brand pinned in docs-brand.lock.json into .brand (needs network)
+    cmds:
+      - python3 tools/fetch_brand.py
   build:
     desc: Publish the pinned .github organization pages with actual Task help
     cmds:
       - uv run --locked --no-sync python tools/build_docs.py
+    env:
+      DOCS_BRAND_FILE: '{{if .DOCS_BRAND_SOURCE}}{{else}}{{.ROOT_DIR}}/.brand/brand.css{{end}}'
   check:
     desc: Validate pages, links, fragments, redirects, navigation, search and both source revisions
     cmds:

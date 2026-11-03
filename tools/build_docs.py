@@ -35,13 +35,19 @@ LICENSE_PAGE = {'LICENSE.md': 'license.md'}
 def brand_css():
     """Return the docs brand pinned in docs-brand.lock.json after checking its sha256.
 
-    The brand is owned by collaboration-guidelines brand/docs/. DOCS_BRAND_SOURCE may name a
-    local collaboration-guidelines checkout to read the pinned commit offline; the digest is
-    still enforced.
+    The brand is owned by collaboration-guidelines brand/docs/. DOCS_BRAND_FILE may name a copy
+    staged by tools/fetch_brand.py (how CI and the offline `task verify` get it), and
+    DOCS_BRAND_SOURCE may name a local collaboration-guidelines checkout to read the pinned
+    commit offline. The digest is enforced on every path.
     """
     pin = json.loads(BRAND_LOCK.read_text())
+    staged = os.environ.get('DOCS_BRAND_FILE')
     local = os.environ.get('DOCS_BRAND_SOURCE')
-    if local:
+    if staged:
+        if not Path(staged).is_file():
+            raise FileNotFoundError(f'{staged} is missing; run `task brand` (tools/fetch_brand.py) first')
+        data = Path(staged).read_bytes()
+    elif local:
         data = subprocess.check_output(['git', '-C', local, 'show', f"{pin['commit']}:{pin['path']}"])
     else:
         url = f"https://raw.githubusercontent.com/{pin['repository']}/{pin['commit']}/{pin['path']}"
