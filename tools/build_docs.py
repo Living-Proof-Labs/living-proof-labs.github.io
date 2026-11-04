@@ -168,7 +168,9 @@ def main():
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
     (source / 'assets/brand.css').write_bytes(brand_css())
-    shutil.copyfile(ROOT / 'docs/favicon.svg', source / 'assets/favicon.svg')
+    for icon in ('favicon.svg', 'favicon.ico', 'favicon-32.png', 'apple-touch-icon.png',
+                 'icon-192.png', 'icon-512.png', 'site.webmanifest'):
+        shutil.copyfile(ROOT / 'docs' / icon, source / 'assets' / icon)
     shutil.copytree(ROOT / 'docs/vendor/mermaid', source / 'assets/vendor/mermaid')
     shutil.rmtree(STAGE / 'overrides', ignore_errors=True)
     shutil.copytree(ROOT / 'docs/overrides', STAGE / 'overrides')
