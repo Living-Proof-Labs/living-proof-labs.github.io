@@ -1,8 +1,14 @@
 {#- SPDX-License-Identifier: Apache-2.0 -#}
 {% extends "base.html" %}
 {% block extrahead %}
-  <link rel="icon" href="{{ base_url }}/assets/favicon.ico" sizes="any">
-  <link rel="icon" href="{{ base_url }}/assets/favicon-32.png" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="{{ base_url }}/assets/apple-touch-icon.png">
-  <link rel="manifest" href="{{ base_url }}/assets/site.webmanifest">
+  <link rel="icon" href="{{ 'assets/favicon.ico' | url }}" sizes="any">
+  <link rel="icon" href="{{ 'assets/favicon-32.png' | url }}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ 'assets/apple-touch-icon.png' | url }}">
+  <link rel="manifest" href="{{ 'assets/site.webmanifest' | url }}">
+  <style>
+    .lpl-logo .lpl-logo-head { stroke: #111111; }
+    .lpl-logo .lpl-logo-eye { fill: #111111; }
+    [data-md-color-scheme="slate"] .lpl-logo .lpl-logo-head { stroke: #e6fffa; }
+    [data-md-color-scheme="slate"] .lpl-logo .lpl-logo-eye { fill: #e6fffa; }
+  </style>
 {% endblock %}
