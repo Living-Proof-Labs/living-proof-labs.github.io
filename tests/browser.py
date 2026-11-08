@@ -195,6 +195,101 @@ class BrowserTests(unittest.TestCase):
                           if not (url.startswith(allowed) and any(c in t for c in net))], [])
         self.assertEqual([u for u in external if not u.startswith(allowed)], [])
 
+    def test_comparison_recording_caption_caveat_and_fit(self):
+        caveat = (
+            'Historical recording: the Booster T1 pane in the segment from 00:47 to 00:56 '
+            'is an open checkerboard scene, not the hallway shown in the Unitree G1 comparison. '
+            'That segment does not establish equivalent test conditions or comparable results '
+            'across the robots shown there.'
+        )
+        video = self.page.locator('video')
+        expect(video).to_have_count(1)
+        expect(video).to_have_attribute('poster', 'media/g1-comparison-poster.jpg')
+        expect(video).to_have_attribute('preload', 'metadata')
+        expect(video.locator('source')).to_have_attribute('src', 'media/g1-comparison.mp4')
+        expect(video.locator('source')).to_have_attribute('type', 'video/mp4')
+        track = video.locator('track')
+        expect(track).to_have_attribute('src', 'media/g1-comparison.en.vtt')
+        expect(track).to_have_attribute('srclang', 'en')
+        expect(track).to_have_attribute('label', 'English')
+        self.assertEqual(self.page.evaluate('''() => {
+            const video = document.querySelector('video');
+            const track = document.querySelector('track');
+            return {autoplay: video.autoplay, controls: video.controls, playsinline: video.playsInline,
+                    defaultTrack: track.default, videos: document.querySelectorAll('video').length};
+        }'''), {'autoplay': False, 'controls': True, 'playsinline': True, 'defaultTrack': True, 'videos': 1})
+        expect(self.page.locator('#g1-comparison-caption')).to_contain_text(
+            'Snapshot recorded 1 Nov 2026, spec v1.5.0.')
+        expect(self.page.locator('#g1-comparison-caption a')).to_have_attribute(
+            'href', 'https://docs.livingprooflabs.com/livingproof-verification/')
+        expect(self.page.locator('#g1-comparison-limit')).to_contain_text(caveat)
+        expect(self.page.locator('video a[href="media/g1-comparison.mp4"]')).to_have_count(1)
+        poster = self.page.evaluate('''async () => {
+            const img = new Image();
+            img.src = document.querySelector('video').poster;
+            await img.decode();
+            return [img.naturalWidth, img.naturalHeight];
+        }''')
+        self.assertEqual(poster, [1280, 720])
+        fetched = self.page.evaluate('''async () => {
+            const track = await fetch(document.querySelector('track').src);
+            const trackText = await track.text();
+            const movie = await fetch(document.querySelector('video source').src, {headers: {Range: 'bytes=0-15'}});
+            const bytes = Array.from(new Uint8Array(await movie.arrayBuffer()));
+            const probe = document.createElement('video');
+            return {trackOk: track.ok, trackText, videoStatus: movie.status, bytes,
+                    canPlay: probe.canPlayType('video/mp4; codecs="avc1.42E01E"')};
+        }''')
+        self.assertTrue(fetched['trackOk'])
+        self.assertIn('WEBVTT', fetched['trackText'])
+        self.assertIn('Spec v1.5.0', fetched['trackText'])
+        self.assertNotIn('at time of recording', fetched['trackText'])
+        self.assertIn(fetched['videoStatus'], (200, 206))
+        self.assertEqual(bytes(fetched['bytes'][4:8]), b'ftyp')
+        if fetched['canPlay']:
+            self.page.wait_for_function(
+                '() => { const v = document.querySelector("video"); return v.readyState >= 1; }',
+                timeout=10000)
+            decoded = self.page.evaluate('''() => {
+                const v = document.querySelector('video');
+                return {width: v.videoWidth, height: v.videoHeight, duration: v.duration, paused: v.paused};
+            }''')
+            self.assertEqual([decoded['width'], decoded['height']], [1280, 720])
+            self.assertAlmostEqual(decoded['duration'], 66.04, delta=0.05)
+            self.assertTrue(decoded['paused'])
+        else:
+            print('mp4 decode is unavailable in this browser; file bytes were checked instead')
+        for width, height in ((1440, 1000), (390, 844)):
+            for scheme, palette in (('light', 'default'), ('dark', 'slate')):
+                self.page.set_viewport_size({'width': width, 'height': height})
+                self.page.emulate_media(color_scheme=scheme)
+                self.page.goto(self.base + '/#how-it-works')
+                expect(self.page.locator('body')).to_have_attribute('data-md-color-scheme', palette)
+                figure = self.page.locator('figure').filter(has=self.page.locator('video'))
+                expect(figure).to_be_visible()
+                expect(self.page.locator('#g1-comparison-caption')).to_be_visible()
+                expect(self.page.locator('#g1-comparison-limit')).to_be_visible()
+                box = figure.bounding_box()
+                self.assertLessEqual(box['x'] + box['width'], width + 1)
+                self.assertGreater(box['height'], 120)
+                self.assertFalse(self.page.evaluate('''() => {
+                    const nodes = [document.getElementById('g1-comparison-caption'),
+                                   document.getElementById('g1-comparison-limit'),
+                                   document.querySelector('video')];
+                    return nodes.some(node => node.scrollWidth > node.clientWidth + 1)
+                        || document.documentElement.scrollWidth > innerWidth;
+                }'''))
+                # Scroll the figure under the header and capture the viewport. An element
+                # screenshot of this tall figure also paints the fixed "On this page" control.
+                self.page.evaluate('''() => {
+                    const fig = document.querySelector('video').closest('figure');
+                    const header = document.querySelector('.md-header');
+                    const top = fig.getBoundingClientRect().top + window.scrollY
+                        - ((header && header.offsetHeight) || 0) - 8;
+                    window.scrollTo(0, Math.max(0, top));
+                }''')
+                self.page.screenshot(path=str(ARTIFACTS / f'recording-{width}-{scheme}.png'))
+
     def test_directory_identity_tasks_and_license(self):
         tasks = first_table_rows((CONTENT / 'docs' / 'index.md').read_text(encoding='utf-8'))
         self.assertGreater(tasks, 0)

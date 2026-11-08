@@ -17,7 +17,10 @@ published root pages, not other repositories' manuals.
 
 `content.lock.json` pins one full `.github` commit. A content change merges in
 `.github` first; a pull request here then moves the pin. `build.json` and every
-page record both the content and the publisher revision.
+page record both the content and the publisher revision. When that revision
+contains `docs/media/`, the build copies the whole directory into the site's
+`media/` path, including `NOTICE.txt`, without changing file bytes. A revision
+that has no `docs/media/` directory still builds.
 
 ## Build and review
 
@@ -45,9 +48,10 @@ palette persistence, and that the architecture page is reachable from the
 homepage, the navigation, search and the `/architecture.html` redirect. Results are individual JUnit cases in
 `artifacts/browser-tests.xml`; screenshots support review, not a full accessibility
 certification. `task check` runs offline: every page declared in `build.json`
-exists, local links, assets and fragments resolve, redirects point to existing
-pages, architecture is in navigation and the search index, and both revisions
-appear on every page.
+exists, local links, assets and fragments resolve, video sources, posters and
+caption tracks resolve, published `media/` bytes match `build.json` when the
+pin has `docs/media/`, redirects point to existing pages, architecture is in
+navigation and the search index, and both revisions appear on every page.
 
 ## Diagrams
 
