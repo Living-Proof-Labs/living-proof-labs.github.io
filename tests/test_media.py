@@ -21,15 +21,17 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from build_docs import copy_content_media, media_digests  # noqa: E402
 from check_site import Page, main as check_site  # noqa: E402
 
-MERGED = '5c31ca4dc9e15b9186d579f626bbc5d432b8e0a2'
+MERGED = '2eb2e648210bbed4b858fac0266424b5521f25c2'
 # Reviewed pre-merge tip. The pin must be the merge commit, which has the same
 # recording bytes; this constant is the commit the lock must not use.
 REVIEWED_TIP = 'adb1144c68d915e8331efa58b719c38cb6486427'
+# Unmerged tip of the NOTICE wording pull request. The lock uses the merge.
+NOTICE_TIP = '942d173900079d1c070e8076b39501f50d481335'
 RECORDING = {
     'g1-comparison.mp4': '918330b81b9e4de5c6a5b9c5b3aa81de21c42e9ddd246c049e8b1acdb07ca0ca',
     'g1-comparison-poster.jpg': 'f4cf729e36fd5a6def52a151346e1aae842023694f74895ab3190452de361455',
     'g1-comparison.en.vtt': '7652f3d89dc87f712ba55926603391c5bd85d1ea0e1382dbe0f042880b246428',
-    'NOTICE.txt': 'aa32edb05d3afe45fe03f7fdfdc645f171d8d3ce4b60dc5138b205679d6abb3c',
+    'NOTICE.txt': 'de97fe0c33a30f58a45940961b4d30787a92c7514928cb0040aeeb6f56f7cbd4',
 }
 CAVEAT = (
     'Historical recording: the Booster T1 pane in the segment from 00:47 to 00:56 '
@@ -109,6 +111,7 @@ class BuiltRecording(unittest.TestCase):
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
         self.assertEqual(lock['commit'], MERGED)
         self.assertNotEqual(lock['commit'], REVIEWED_TIP)
+        self.assertNotEqual(lock['commit'], NOTICE_TIP)
         self.assertEqual(content['commit'], MERGED)
         self.assertEqual(content['locked_commit'], MERGED)
         self.assertTrue(content['pinned'])
@@ -139,10 +142,12 @@ class BuiltRecording(unittest.TestCase):
             'edits only that last cue, removing',
             'at time of recording',
             'This copy does not\nrelicense the recording.',
-            'The website repository still has the originals.',
-            'This copy does not remove or',
+            'Git history at that commit still',
+            'has the files. This note does not claim they remain on the website\'s current',
+            '47be2bc708f34e93ff6fff86c092a35176b5a818 removed these three paths from the',
         ):
             self.assertIn(phrase, notice)
+        self.assertNotIn('still has the originals', notice)
         page = (SITE / 'index.html').read_text(encoding='utf-8')
         video_at = page.find('<video')
         video_end = page.find('</video>', video_at)
