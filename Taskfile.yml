@@ -18,19 +18,19 @@ tasks:
     cmds:
       - python3 tools/fetch_brand.py
   build:
-    desc: Publish the pinned .github organization pages with actual Task help
+    desc: Publish the pinned .github organization pages, copy docs/media when present, and include actual Task help
     cmds:
       - uv run --locked --no-sync python tools/build_docs.py
     env:
       DOCS_BRAND_FILE: '{{if .DOCS_BRAND_SOURCE}}{{else}}{{.ROOT_DIR}}/.brand/brand.css{{end}}'
   check:
-    desc: Validate pages, links, fragments, redirects, navigation, search and both source revisions
+    desc: Validate pages, links, media, fragments, redirects, navigation, search and both source revisions
     cmds:
       - uv run --locked --no-sync python tools/check_site.py artifacts/site
   test:
-    desc: Exercise generated navigation, search and theme controls in Chromium
+    desc: Exercise navigation, search, theme controls and the comparison recording in Chromium
     cmds:
-      - uv run --locked --no-sync python -m unittest tests/test_content_pin.py
+      - uv run --locked --no-sync python -m unittest tests/test_content_pin.py tests/test_media.py
       - uv run --locked --no-sync python tests/browser.py
   verify:
     desc: Build and verify the delivered documentation artifact

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Check built directory links; optionally request live external destinations."""
+"""Check built directory links, video media and recorded bytes; optionally request live external destinations."""
 import argparse
+import hashlib
 import json
 import re
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
@@ -21,19 +22,21 @@ class Page(HTMLParser):
         attrs = dict(attrs)
         if "id" in attrs:
             self.ids.add(attrs["id"])
-        if tag == "a" and "href" in attrs:
+        if tag in {"a", "link"} and "href" in attrs:
             self.links.append(attrs["href"])
-        if tag in {"link", "script", "img"}:
-            key = "href" if tag == "link" else "src"
-            if key in attrs:
-                self.links.append(attrs[key])
+        if tag in {"script", "img", "video", "audio", "source", "track"} and "src" in attrs:
+            self.links.append(attrs["src"])
+        # A poster is not the download anchor. A missing poster or caption track
+        # has to fail even when the MP4 link still resolves.
+        if tag in {"video", "audio"} and "poster" in attrs:
+            self.links.append(attrs["poster"])
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("site", type=Path)
     parser.add_argument("--live", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     root = args.site.resolve()
     pages = {p: Page(p.read_text()) for p in root.rglob("*.html")}
     failures = []
@@ -66,6 +69,19 @@ def main():
     except (OSError, ValueError, KeyError, AssertionError) as error:
         identity = {}
         failures.append(f'Invalid or inconsistent build identity: {error}')
+    media_root = (root / 'media').resolve()
+    for rel, digest in identity.get('content', {}).get('media_files', {}).items():
+        path = PurePosixPath(str(rel))
+        built = root / 'media' / str(rel)
+        if not rel or path.is_absolute() or '..' in path.parts or not built.resolve().is_relative_to(media_root):
+            failures.append(f'Media path escapes the built site: {rel}')
+            continue
+        if not built.is_file():
+            failures.append(f'Missing built media file: media/{rel}')
+            continue
+        actual = hashlib.sha256(built.read_bytes()).hexdigest()
+        if actual != digest:
+            failures.append(f'Media bytes differ from build.json: media/{rel}')
     for name in identity.get('pages', []):
         if root / name not in pages:
             failures.append(f'Missing declared page: {name}')

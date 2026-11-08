@@ -7,6 +7,9 @@ publisher: theme, search, generated Task help, identity, redirects and deploymen
 `content.lock.json` pins the content commit. CONTENT_DIR (default `.content`) must be a
 checkout of it; `task content` fetches one. A local preview may point CONTENT_DIR at a
 working tree; its revision is then recorded as unpinned and CI refuses to build it.
+When that revision contains docs/media/, this build copies the whole directory into
+the site media/ path without changing bytes, including NOTICE.txt. A revision with
+no docs/media directory still builds.
 """
 import hashlib
 import html
@@ -65,6 +68,48 @@ def command(*args, cwd=ROOT):
 
 def content_dir():
     return Path(os.environ.get('CONTENT_DIR') or ROOT / '.content').resolve()
+
+
+def media_root(content_root):
+    return Path(content_root) / 'docs' / 'media'
+
+
+def media_digests(content_root):
+    """Return sha256 digests for docs/media, or an empty map when that directory is absent.
+
+    Older organization revisions have no docs/media directory. That absence means
+    there is nothing to publish, not that the pin is broken.
+    """
+    root = media_root(content_root)
+    if not root.is_dir():
+        return {}
+    digests = {}
+    for path in sorted(item for item in root.rglob('*') if item.is_file()):
+        rel = path.relative_to(root).as_posix()
+        if not rel or PurePosixPath(rel).is_absolute() or '..' in PurePosixPath(rel).parts:
+            raise SystemExit(f'Refusing media path that leaves docs/media: {rel}')
+        digests[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
+def copy_content_media(content_root, destination):
+    """Copy docs/media into the built media path when the pinned revision has one.
+
+    The copy includes NOTICE.txt and every other file in that directory. Each file
+    is copied as bytes, so a recording is not rewritten. A missing docs/media
+    directory is left alone and an older pin still builds.
+    """
+    root = media_root(content_root)
+    if not root.is_dir():
+        return
+    destination = Path(destination)
+    for path in sorted(item for item in root.rglob('*') if item.is_file()):
+        rel = path.relative_to(root)
+        if '..' in rel.parts:
+            raise SystemExit(f'Refusing media path that leaves docs/media: {rel.as_posix()}')
+        target = destination / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
 
 
 def content_identity(lock):
@@ -158,6 +203,7 @@ def main():
         target.write_text(text)
     directory_text = (content_root / site['directory']).read_text()
     content['source_files'][site['directory']] = hashlib.sha256(directory_text.encode()).hexdigest()
+    content['media_files'] = media_digests(content_root)
     publisher_files = {}
     for src, dest in LICENSE_PAGE.items():
         text = (ROOT / src).read_text()
@@ -206,6 +252,8 @@ def main():
 Content pinned by `content.lock.json`: **{content["pinned"]}**. Local content changes:
 **{content["dirty"]}**. Local publisher changes: **{dirty}**.
 [Machine-readable build identity](build.json) lists every source file and its sha256.
+When the pinned revision contains `docs/media/`, that record includes each media
+file hash and the build publishes those bytes under `media/`.
 
 The organization overview, vision, architecture and directory are authored in
 `.github` and published here from that pinned revision; this repository keeps no
@@ -242,6 +290,9 @@ evidence remain independent.
             {'License': 'license.md'}, {'livingprooflabs.com ↗': 'https://livingprooflabs.com/'}]
     config.update(docs_dir='source', site_dir='site', nav=nav)
     (STAGE / 'mkdocs.yml').write_text(yaml.safe_dump(config, sort_keys=False, allow_unicode=True))
+    # The generator needs the files present. The published copy below is taken
+    # from the content revision again so the site keeps the original bytes.
+    copy_content_media(content_root, source / 'media')
     subprocess.run(['zensical', 'build', '--clean', '-f', '.build/mkdocs.yml'], cwd=ROOT, check=True)
     for old, target in redirects.items():
         if (STAGE / 'site' / old).exists():
@@ -259,6 +310,7 @@ evidence remain independent.
             page.write_text(text.replace('</head>', f'<script src="{src}"></script>\n</head>', 1))
     shutil.rmtree(SITE, ignore_errors=True)
     shutil.copytree(STAGE / 'site', SITE)
+    copy_content_media(content_root, SITE / 'media')
     (SITE / '.nojekyll').touch()
 
 
