@@ -7,6 +7,7 @@ from pathlib import Path
 import threading
 import time
 import unittest
+import urllib.request
 import xml.etree.ElementTree as ET
 
 from playwright.sync_api import sync_playwright, expect
@@ -14,6 +15,29 @@ from playwright.sync_api import sync_playwright, expect
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / 'artifacts'
 CONTENT = Path(os.environ.get('CONTENT_DIR') or ROOT / '.content').resolve()
+# brand.css imports these faces. Offline CI (docker --network none) cannot fetch
+# them; they are not site files and not the GitHub releases lookup.
+EXCUSED_REQUEST_PREFIXES = (
+    'https://fonts.googleapis.com/',
+    'https://fonts.gstatic.com/',
+)
+
+
+def excused_request(url):
+    return url.startswith(EXCUSED_REQUEST_PREFIXES)
+
+
+def chrome_cancels_recording(url, reason):
+    """Chrome reports net::ERR_ABORTED for the hallway recording without a bad response.
+
+    After a successful 206 it cancels its own media loader, and the video element
+    still reaches HAVE_ENOUGH_DATA. Leaving the page also cancels an in-flight
+    download. GitHub Pages sends video/mp4 and a correct byte range, and the moov
+    atom already precedes mdat, so this is not a broken file. An HTTP error for
+    the same URL is still a failure.
+    """
+    path = url.split('?', 1)[0]
+    return reason == 'net::ERR_ABORTED' and path.endswith('/media/g1-comparison.mp4')
 
 
 def first_table_rows(markdown):
@@ -56,11 +80,54 @@ class BrowserTests(unittest.TestCase):
     def setUp(self):
         self.context = self.browser.new_context(viewport={'width': 1440, 'height': 1000})
         self.page = self.context.new_page()
+        self.release_requests = []
+        self.failed_requests = []
+
+        def on_request(request):
+            url = request.url
+            if 'api.github.com' in url and '/releases' in url:
+                self.release_requests.append(url)
+
+        def on_response(response):
+            if response.status >= 400 and not excused_request(response.url):
+                self.failed_requests.append(f'{response.status} {response.url}')
+
+        def on_failed(request):
+            if excused_request(request.url):
+                return
+            failure = request.failure
+            if isinstance(failure, str):
+                reason = failure
+            elif isinstance(failure, dict):
+                reason = failure.get('errorText', 'failed')
+            else:
+                reason = 'failed'
+            if chrome_cancels_recording(request.url, reason):
+                return
+            self.failed_requests.append(f'{reason} {request.url}')
+
+        self.page.on('request', on_request)
+        self.page.on('response', on_response)
+        self.page.on('requestfailed', on_failed)
         self.page.goto(self.base + '/')
 
     def tearDown(self):
-        self.page.screenshot(path=str(ARTIFACTS / (self._testMethodName + '.png')), full_page=True)
-        self.context.close()
+        try:
+            self.page.screenshot(path=str(ARTIFACTS / (self._testMethodName + '.png')), full_page=True)
+            self.assertEqual(self.release_requests, [])
+            self.assertEqual(self.failed_requests, [])
+        finally:
+            self.context.close()
+
+    def test_root_favicon_is_served(self):
+        with urllib.request.urlopen(self.base + '/favicon.ico') as response:
+            body = response.read()
+            content_type = response.headers.get_content_type()
+            status = response.status
+        self.assertEqual(status, 200)
+        self.assertIn(content_type, ('image/vnd.microsoft.icon', 'image/x-icon'))
+        self.assertTrue(body.startswith(b'\x00\x00\x01\x00'))
+        self.assertEqual(body, (ROOT / 'docs' / 'favicon.ico').read_bytes())
 
     def test_search_opens_local_result_and_reload(self):
         self.page.locator('.md-search__button').click()
@@ -117,7 +184,7 @@ class BrowserTests(unittest.TestCase):
             self.page.keyboard.press('Tab')
             self.assertIn('Skip', self.page.evaluate('document.activeElement.textContent'))
             self.page.keyboard.press('Enter')
-            self.assertTrue(self.page.url.endswith('#__skip'))
+            self.page.wait_for_url(lambda url: url.endswith('#__skip'))
             if width == 390:
                 # Start the drawer journey after the skip-link hash navigation settles.
                 # A fresh load keeps its pending hashchange from closing the drawer.
@@ -133,7 +200,9 @@ class BrowserTests(unittest.TestCase):
 
     def test_mermaid_renders_on_desktop_and_mobile_in_light_and_dark(self):
         errors, external = [], []
-        allowed = ('https://fonts.googleapis.com/', 'https://fonts.gstatic.com/', 'https://api.github.com/')
+        # Brand fonts are the only requests that may leave the box. The header
+        # repository badge must not call the GitHub releases API.
+        allowed = EXCUSED_REQUEST_PREFIXES
         self.page.on('console', lambda m: m.type == 'error' and errors.append(
             (m.text, (m.location or {}).get('url', ''))))
         self.page.on('pageerror', lambda e: errors.append((str(e), '')))
@@ -187,9 +256,10 @@ class BrowserTests(unittest.TestCase):
                 self.page.locator('.mermaid').first.screenshot(
                     path=str(ARTIFACTS / f'mermaid-{width}-{scheme}.png'))
                 self.page.screenshot(path=str(ARTIFACTS / f'mermaid-page-{width}-{scheme}.png'), full_page=True)
-        # Only the site's font and GitHub-release widget may reach outward (answered with 204
-        # above); a network failure is tolerated only for those origins, under either code.
-        # Mermaid itself must come from the site, never a CDN.
+        # Only the brand fonts may reach outward (answered with 204 above); a network
+        # failure is tolerated only for those origins, under either code. Mermaid
+        # itself must come from the site, never a CDN. A GitHub releases request is
+        # not tolerated: this publisher has no releases, and that lookup 404s.
         net = ('net::ERR_FAILED', 'net::ERR_INTERNET_DISCONNECTED')
         self.assertEqual([t for t, url in errors
                           if not (url.startswith(allowed) and any(c in t for c in net))], [])

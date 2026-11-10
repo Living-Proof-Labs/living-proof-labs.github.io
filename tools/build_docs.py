@@ -217,6 +217,9 @@ def main():
     for icon in ('favicon.svg', 'favicon.ico', 'favicon-32.png', 'apple-touch-icon.png',
                  'icon-192.png', 'icon-512.png', 'site.webmanifest'):
         shutil.copyfile(ROOT / 'docs' / icon, source / 'assets' / icon)
+    # Browsers request /favicon.ico before they read <link rel="icon">. The page
+    # already publishes this brand icon under assets/; the root copy is the same file.
+    shutil.copyfile(ROOT / 'docs' / 'favicon.ico', source / 'favicon.ico')
     shutil.copytree(ROOT / 'docs/vendor/mermaid', source / 'assets/vendor/mermaid')
     shutil.rmtree(STAGE / 'overrides', ignore_errors=True)
     shutil.copytree(ROOT / 'docs/overrides', STAGE / 'overrides')

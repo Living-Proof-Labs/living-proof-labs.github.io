@@ -1,0 +1,16 @@
+{#- SPDX-License-Identifier: Apache-2.0 -#}
+{#- Repository link without Zensical's source facts.
+    data-md-component="source" requests api.github.com/.../releases/latest on every
+    page. This publisher has no GitHub releases, so that response is a 404. The
+    same handler always does that lookup for a github.com repository URL; there
+    is no setting that keeps the link and skips only the version. Omit the
+    component so the badge still opens the repository. -#}
+<a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-source">
+  <div class="md-source__icon md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.repo_name }}
+  </div>
+</a>
