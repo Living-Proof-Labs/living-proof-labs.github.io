@@ -43,6 +43,11 @@ def main(argv=None):
     external = set()
     if root / "index.html" not in pages:
         failures.append("Missing built index.html; run task build first")
+    icon = root / "favicon.ico"
+    brand_icon = Path(__file__).resolve().parents[1] / "docs" / "favicon.ico"
+    icon_bytes = icon.read_bytes() if icon.is_file() else b""
+    if icon_bytes != brand_icon.read_bytes() or not icon_bytes.startswith(b"\x00\x00\x01\x00"):
+        failures.append("Root /favicon.ico must be the existing docs/favicon.ico brand icon")
     required = {
         'index.html': ['living-proof-labs-documentation', 'livingproof', 'published-manuals',
                        'project-directory', 'help-improve-the-documentation', 'version-and-source'],
@@ -101,6 +106,8 @@ def main(argv=None):
     nav = home_text[home_text.find('md-nav--primary'):]
     if architecture not in nav:
         failures.append('Architecture is missing from the primary navigation')
+    if 'data-md-component="source"' in home_text:
+        failures.append('Source badge still loads repository facts (GitHub releases API)')
     try:
         search = json.loads((root / 'search.json').read_text())
         items = search.get('items') or search.get('docs') or []
