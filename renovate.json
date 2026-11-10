@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Docs publisher, modelled on livingproof-worlds. Inherits the shared preset: automerge off, 2 concurrent / 1 per hour, Monday before 06:00 UTC. Enables github-actions, dockerfile, and pep621.",
-  "extends": ["github>Living-Proof-Labs/collaboration-guidelines:renovate-preset#v7.4.2"],
+  "extends": ["github>Living-Proof-Labs/collaboration-guidelines:renovate-preset#v7.8.1"],
   "enabledManagers": ["github-actions", "dockerfile", "pep621"],
   "lockFileMaintenance": {"enabled": false}
 }
