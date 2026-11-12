@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from build_docs import copy_content_media, media_digests  # noqa: E402
 from check_site import Page, main as check_site  # noqa: E402
 
-MERGED = '6c5146645fb650f680157900bdf342406d5d9c1f'
+MERGED = '89573d88fc82ad79e2696e7cdd642444cdb99699'
 # Reviewed pre-merge tip. The pin must be the merge commit, which has the same
 # recording bytes; this constant is the commit the lock must not use.
 REVIEWED_TIP = 'adb1144c68d915e8331efa58b719c38cb6486427'
