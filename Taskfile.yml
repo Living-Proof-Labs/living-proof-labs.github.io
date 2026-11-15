@@ -30,7 +30,7 @@ tasks:
   test:
     desc: Exercise navigation, search, theme controls and the comparison recording in Chromium
     cmds:
-      - uv run --locked --no-sync python -m unittest tests/test_content_pin.py tests/test_media.py
+      - uv run --locked --no-sync python -m unittest tests/test_content_pin.py tests/test_media.py tests/test_guidelines_pins.py tests/test_docs_brand_lock.py
       - uv run --locked --no-sync python tests/browser.py
   verify:
     desc: Build and verify the delivered documentation artifact
