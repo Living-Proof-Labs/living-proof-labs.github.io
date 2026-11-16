@@ -6,7 +6,7 @@ RUN --mount=type=secret,id=ca,required=false,mode=0444 set -eu; \
     sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources; \
     if [ -f /run/secrets/ca ]; then printf 'Acquire::https::CaInfo "/run/secrets/ca";\n' > /etc/apt/apt.conf.d/99-build-ca; fi; \
     if [ -n "${HTTPS_PROXY:-}" ]; then printf 'Acquire::https::Proxy "%s";\n' "$HTTPS_PROXY" > /etc/apt/apt.conf.d/98-build-proxy; fi; \
-    apt-get update; apt-get install -y --no-install-recommends chromium ca-certificates curl git; \
+    apt-get update; apt-get install -y --no-install-recommends chromium ca-certificates curl git libatomic1; \
     rm -f /etc/apt/apt.conf.d/99-build-ca /etc/apt/apt.conf.d/98-build-proxy; rm -rf /var/lib/apt/lists/*
 ARG TASK_VERSION=3.54.0
 RUN --mount=type=secret,id=ca,required=false,mode=0444 set -eu; \
