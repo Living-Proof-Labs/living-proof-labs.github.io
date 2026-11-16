@@ -40,6 +40,106 @@ def chrome_cancels_recording(url, reason):
     return reason == 'net::ERR_ABORTED' and path.endswith('/media/g1-comparison.mp4')
 
 
+def failure_reason(request):
+    failure = request.failure
+    if isinstance(failure, str):
+        return failure
+    if isinstance(failure, dict):
+        return failure.get('errorText') or 'failed'
+    return getattr(failure, 'error_text', None) or getattr(failure, 'errorText', None) or 'failed'
+
+
+def request_frame(request):
+    try:
+        return request.frame
+    except Exception:
+        return None
+
+
+class ObservedRequests:
+    """Failed loads, excluding aborts a new document's navigation caused.
+
+    Playwright 1.65 fails in-flight requests of the previous document with
+    net::ERR_ABORTED when that document is replaced, then emits framenavigated
+    on the same frame. Chromium does not report those cancellations, so
+    Playwright 1.64 never emitted them. The failure is still attached to the
+    previous document and the navigation event follows it. An abort that no
+    navigation request committed, and every HTTP error, stays a failure.
+    """
+
+    def __init__(self):
+        self.release_requests = []
+        self.failed_requests = []
+        self.navigation_aborts = []
+        self._abort_batch = []
+        self._navigating_frames = set()
+
+    def attach(self, page):
+        page.on('request', self._on_request)
+        page.on('response', self._on_response)
+        page.on('requestfailed', self._on_failed)
+        page.on('framenavigated', self._on_navigated)
+
+    def finish(self):
+        self._record_aborts(self._abort_batch)
+        self._abort_batch = []
+
+    def _on_request(self, request):
+        url = request.url
+        if 'api.github.com' in url and '/releases' in url:
+            self.release_requests.append(url)
+        frame = request_frame(request)
+        if request.is_navigation_request() and frame is not None:
+            # Aborts from before this navigation are not ones it cancels.
+            self._record_aborts(self._abort_batch)
+            self._abort_batch = []
+            self._navigating_frames.add(id(frame))
+            return
+        if not self._abort_batch:
+            return
+        if frame is None or id(frame) not in self._navigating_frames:
+            self._record_aborts(self._abort_batch)
+            self._abort_batch = []
+
+    def _on_response(self, response):
+        if response.status >= 400 and not excused_request(response.url):
+            self.failed_requests.append(f'{response.status} {response.url}')
+
+    def _on_failed(self, request):
+        if excused_request(request.url):
+            return
+        reason = failure_reason(request)
+        if chrome_cancels_recording(request.url, reason):
+            return
+        frame = request_frame(request)
+        if (reason == 'net::ERR_ABORTED' and frame is not None
+                and not request.is_navigation_request()
+                and id(frame) in self._navigating_frames):
+            self._abort_batch.append((request, id(frame)))
+            return
+        self.failed_requests.append(f'{reason} {request.url}')
+
+    def _on_navigated(self, frame):
+        frame_id = id(frame)
+        committing = frame_id in self._navigating_frames
+        self._navigating_frames.discard(frame_id)
+        if not committing:
+            self._record_aborts(self._abort_batch)
+            self._abort_batch = []
+            return
+        kept = []
+        for request, owner_id in self._abort_batch:
+            if owner_id == frame_id:
+                self.navigation_aborts.append(request.url)
+                continue
+            kept.append((request, owner_id))
+        self._abort_batch = kept
+
+    def _record_aborts(self, batch):
+        for request, _owner_id in batch:
+            self.failed_requests.append(f'{failure_reason(request)} {request.url}')
+
+
 def first_table_rows(markdown):
     """Data rows of the first Markdown table, so the content decides the count."""
     lines = markdown.splitlines()
@@ -80,42 +180,16 @@ class BrowserTests(unittest.TestCase):
     def setUp(self):
         self.context = self.browser.new_context(viewport={'width': 1440, 'height': 1000})
         self.page = self.context.new_page()
-        self.release_requests = []
-        self.failed_requests = []
-
-        def on_request(request):
-            url = request.url
-            if 'api.github.com' in url and '/releases' in url:
-                self.release_requests.append(url)
-
-        def on_response(response):
-            if response.status >= 400 and not excused_request(response.url):
-                self.failed_requests.append(f'{response.status} {response.url}')
-
-        def on_failed(request):
-            if excused_request(request.url):
-                return
-            failure = request.failure
-            if isinstance(failure, str):
-                reason = failure
-            elif isinstance(failure, dict):
-                reason = failure.get('errorText', 'failed')
-            else:
-                reason = 'failed'
-            if chrome_cancels_recording(request.url, reason):
-                return
-            self.failed_requests.append(f'{reason} {request.url}')
-
-        self.page.on('request', on_request)
-        self.page.on('response', on_response)
-        self.page.on('requestfailed', on_failed)
+        self.requests = ObservedRequests()
+        self.requests.attach(self.page)
         self.page.goto(self.base + '/')
 
     def tearDown(self):
         try:
             self.page.screenshot(path=str(ARTIFACTS / (self._testMethodName + '.png')), full_page=True)
-            self.assertEqual(self.release_requests, [])
-            self.assertEqual(self.failed_requests, [])
+            self.requests.finish()
+            self.assertEqual(self.requests.release_requests, [])
+            self.assertEqual(self.requests.failed_requests, [])
         finally:
             self.context.close()
 
@@ -374,6 +448,75 @@ class BrowserTests(unittest.TestCase):
         self.page.goto(self.base + '/vision.html')
         expect(self.page.locator('article')).to_contain_text('License: Apache-2.0')
         expect(self.page.locator('article')).to_contain_text('not proof of root cause')
+
+    def test_broken_same_site_file_is_not_excused(self):
+        """A same-site 404 and an abort no navigation caused still fail the suite."""
+        started = threading.Event()
+        stop = threading.Event()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                path = self.path.split('?', 1)[0]
+                if path == '/hang':
+                    started.set()
+                    stop.wait(5)
+                    return
+                if path == '/missing.js':
+                    self.send_error(404, 'missing')
+                    return
+                if path == '/start.html':
+                    body = b'<!doctype html><title>start</title>'
+                    content_type = 'text/html; charset=utf-8'
+                elif path == '/broken.html':
+                    body = (
+                        b'<!doctype html><title>broken</title>'
+                        b'<script src="/missing.js"></script>'
+                        b'<script src="/aborted.js"></script>'
+                    )
+                    content_type = 'text/html; charset=utf-8'
+                else:
+                    self.send_error(404, path)
+                    return
+                self.send_response(200)
+                self.send_header('content-type', content_type)
+                self.send_header('content-length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f'http://127.0.0.1:{server.server_port}'
+        context = self.browser.new_context()
+        page = context.new_page()
+        observed = ObservedRequests()
+        observed.attach(page)
+        try:
+            page.route('**/aborted.js', lambda route: route.abort('aborted'))
+            page.goto(base + '/start.html')
+            page.evaluate('() => { fetch("/hang"); }')
+            self.assertTrue(started.wait(5), 'the in-flight request never reached the fixture')
+            page.goto(base + '/broken.html')
+            observed.finish()
+            self.assertTrue(any(url.endswith('/hang') for url in observed.navigation_aborts),
+                            observed.navigation_aborts)
+            self.assertFalse(any('/hang' in item for item in observed.failed_requests),
+                             observed.failed_requests)
+            with self.assertRaises(AssertionError) as caught:
+                self.assertEqual(observed.failed_requests, [])
+            message = str(caught.exception)
+            self.assertIn('404', message)
+            self.assertIn('/missing.js', message)
+            self.assertIn('net::ERR_ABORTED', message)
+            self.assertIn('/aborted.js', message)
+        finally:
+            context.close()
+            stop.set()
+            server.shutdown()
+            server.server_close()
 
 
 class Results(unittest.TextTestResult):
