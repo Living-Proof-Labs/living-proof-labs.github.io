@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 FROM python:3.12.12-slim-bookworm AS development
 COPY --from=uv /uv /usr/local/bin/uv
 RUN --mount=type=secret,id=ca,required=false,mode=0444 set -eu; \
