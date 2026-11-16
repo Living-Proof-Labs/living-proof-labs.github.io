@@ -13,6 +13,7 @@ no docs/media directory still builds.
 """
 import hashlib
 import html
+import importlib.metadata
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -64,6 +65,12 @@ def brand_css():
 
 def command(*args, cwd=ROOT):
     return subprocess.check_output(args, cwd=cwd, text=True).strip()
+
+
+def installed_zensical():
+    """Return the name and version of the Zensical package running this build."""
+    metadata = importlib.metadata.metadata('zensical')
+    return metadata['Name'], metadata['Version']
 
 
 def content_dir():
@@ -237,7 +244,10 @@ def main():
     licenses['tasks.md'] = 'CC-BY-4.0'
     run = os.environ.get('GITHUB_RUN_ID')
     redirects = site.get('redirects', {})
-    provenance = {'source_commit': sha, 'source_dirty': dirty, 'generator': 'zensical==0.0.73',
+    generator_name, generator_version = installed_zensical()
+    generator_label = generator_name[:1].upper() + generator_name[1:]
+    provenance = {'source_commit': sha, 'source_dirty': dirty,
+                  'generator': f'{generator_name}=={generator_version}',
                   'publisher': {'repository': PUBLISHER, 'commit': sha, 'dirty': dirty,
                                 'source_files': publisher_files},
                   'content': content, 'pages': sorted(p.replace('.md', '.html') for p in licenses),
@@ -265,7 +275,7 @@ This site follows the pinned revision; historical rendered copies are not
 maintained. Documentation identity is separate from each project's package or
 catalog release.
 
-The generator is Zensical 0.0.73, with the dependency closure recorded in `uv.lock`.
+The generator is {generator_label} {generator_version}, with the dependency closure recorded in `uv.lock`.
 The build does not import or search other projects' manuals. Their deployments and
 evidence remain independent.
 
