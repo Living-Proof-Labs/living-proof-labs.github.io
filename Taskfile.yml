@@ -6,11 +6,11 @@ tasks:
     cmds:
       - uv sync --locked --no-python-downloads
   content:
-    desc: Fetch the .github content revision pinned in content.lock.json into .content
+    desc: Fetch the .github content release pinned in content.lock.json into .content
     cmds:
       - python3 tools/fetch_content.py
   content:pin:
-    desc: Fail unless the pinned .github commit is reachable from .github main (needs network)
+    desc: Fail unless the pinned .github tag resolves to its commit and is reachable from .github main (needs network)
     cmds:
       - python3 tools/check_content_pin.py
   brand:

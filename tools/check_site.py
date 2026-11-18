@@ -65,12 +65,18 @@ def main(argv=None):
         assert len(publisher['commit']) == 40 and publisher['commit'] == identity['source_commit']
         assert len(content['commit']) == 40, 'content commit'
         assert content['repository'] == 'Living-Proof-Labs/.github', 'content repository'
+        assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+                            content['locked_tag']), 'content locked_tag'
+        if content.get('pinned'):
+            assert content.get('tag') == content['locked_tag'], 'content tag'
         for name in identity['pages']:
             text = (root / name).read_text()
             for role, commit in (('publisher', publisher['commit']), ('content', content['commit'])):
                 assert commit[:7] in text, f'{name} does not show the {role} revision'
         source = (root / 'source.html').read_text()
         assert publisher['commit'] in source and content['commit'] in source, 'source.html revisions'
+        if content.get('tag'):
+            assert content['tag'] in source, 'source.html content tag'
     except (OSError, ValueError, KeyError, AssertionError) as error:
         identity = {}
         failures.append(f'Invalid or inconsistent build identity: {error}')
