@@ -41,12 +41,12 @@ def make_content_repo(repo, *, tag='v1.0.0', tag_on_branch_only=False):
 
 
 class CommittedLock(unittest.TestCase):
-    def test_committed_content_lock_pins_v1_0_0_tag_and_commit(self):
+    def test_committed_content_lock_pins_v1_0_2_tag_and_commit(self):
         lock = json.loads((ROOT / 'content.lock.json').read_text())
         self.assertEqual(sorted(lock), ['commit', 'repository', 'tag'])
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
-        self.assertEqual(lock['tag'], 'v1.0.0')
-        self.assertEqual(lock['commit'], '2ac1feaa06ab12193da2015cc6de73e373801811')
+        self.assertEqual(lock['tag'], 'v1.0.2')
+        self.assertEqual(lock['commit'], '9e273051d42bfc104744964c595a8f0aeb3650d1')
         self.assertEqual(lock_errors(lock), [])
 
 
@@ -186,6 +186,21 @@ class BuildRejectsBranchPin(unittest.TestCase):
                 with self.assertRaises(SystemExit) as caught:
                     build_docs.content_identity(lock)
             self.assertIn('tag v1.0.0 is missing', str(caught.exception))
+
+    def test_ci_rejects_tag_mismatch_even_when_checkout_matches_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            first = make_content_repo(repo)
+            git(repo, 'commit', '-q', '--allow-empty', '-m', 'two')
+            second = git(repo, 'rev-parse', 'HEAD')
+            lock = {'repository': 'Living-Proof-Labs/.github',
+                    'tag': 'v1.0.0', 'commit': second}
+            with mock.patch.dict(os.environ, {'CONTENT_DIR': str(repo),
+                                             'GITHUB_ACTIONS': 'true'}):
+                with self.assertRaises(SystemExit) as caught:
+                    build_docs.content_identity(lock)
+            self.assertIn(f'tag v1.0.0 resolves to {first[:12]}', str(caught.exception))
+            self.assertIn(second[:12], str(caught.exception))
 
     def test_content_identity_records_pinned_tag(self):
         with tempfile.TemporaryDirectory() as tmp:
