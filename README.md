@@ -15,12 +15,13 @@ reference, redirects, link checks, source identity and deployment. The docs bran
 change it there, not here. Search covers only the
 published root pages, not other repositories' manuals.
 
-`content.lock.json` pins one full `.github` commit. A content change merges in
-`.github` first; a pull request here then moves the pin. `build.json` and every
-page record both the content and the publisher revision. When that revision
-contains `docs/media/`, the build copies the whole directory into the site's
-`media/` path, including `NOTICE.txt`, without changing file bytes. A revision
-that has no `docs/media/` directory still builds.
+`content.lock.json` pins one released `.github` tag and its resolved commit. A
+content change merges and releases in `.github` first; a pull request here then
+moves the pin. `build.json` and every page record both the content and the
+publisher revision. When that revision contains `docs/media/`, the build copies
+the whole directory into the site's `media/` path, including `NOTICE.txt`,
+without changing file bytes. A revision that has no `docs/media/` directory
+still builds.
 
 ## Build and review
 

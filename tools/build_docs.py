@@ -21,10 +21,14 @@ import posixpath
 import re
 import shutil
 import subprocess
+import sys
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from check_content_pin import lock_errors, tag_commit  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / '.build'
@@ -120,19 +124,32 @@ def copy_content_media(content_root, destination):
 
 
 def content_identity(lock):
+    errors = lock_errors(lock)
+    if errors:
+        raise SystemExit('\n'.join(errors))
     path = content_dir()
     if not (path / 'docs/site.json').is_file():
         raise SystemExit(f'No organization content at {path}; run `task content` to fetch '
-                         f'{lock["repository"]}@{lock["commit"][:12]} or set CONTENT_DIR')
+                         f'{lock["repository"]}@{lock["tag"]} ({lock["commit"][:12]}) or set CONTENT_DIR')
     commit = command('git', 'rev-parse', 'HEAD', cwd=path)
     dirty = bool(command('git', 'status', '--porcelain', '--untracked-files=normal', cwd=path))
-    pinned = commit == lock['commit'] and not dirty
+    resolved_tag = tag_commit(path, lock['tag'])
+    pinned = commit == lock['commit'] and resolved_tag == lock['commit'] and not dirty
     if os.environ.get('GITHUB_ACTIONS') == 'true' and not pinned:
+        if resolved_tag != lock['commit']:
+            detail = (f'tag {lock["tag"]} resolves to {resolved_tag[:12]}'
+                      if resolved_tag else f'tag {lock["tag"]} is missing')
+            raise SystemExit(f'Refusing CI publication: {detail}, '
+                             f'content.lock.json pins {lock["tag"]} at {lock["commit"][:12]}')
         raise SystemExit(f'Refusing CI publication: content is {commit[:12]}'
                          f'{" with local changes" if dirty else ""}, '
                          f'content.lock.json pins {lock["commit"][:12]}')
-    return path, {'repository': lock['repository'], 'commit': commit, 'dirty': dirty,
-                  'pinned': pinned, 'locked_commit': lock['commit']}
+    return path, {'repository': lock['repository'],
+                  'tag': lock['tag'] if pinned else None,
+                  'commit': commit, 'dirty': dirty,
+                  'pinned': pinned,
+                  'locked_tag': lock['tag'],
+                  'locked_commit': lock['commit']}
 
 
 def table(header, rows):
@@ -182,8 +199,9 @@ def main():
     if os.environ.get('GITHUB_ACTIONS') == 'true' and dirty:
         raise SystemExit('Refusing CI publication from a dirty source tree')
     lock = json.loads(LOCK.read_text())
-    if not re.fullmatch(r'[0-9a-f]{40}', lock['commit']):
-        raise SystemExit('content.lock.json must pin a full 40-character commit')
+    errors = lock_errors(lock)
+    if errors:
+        raise SystemExit('\n'.join(errors))
     content_root, content = content_identity(lock)
     site = json.loads((content_root / 'docs/site.json').read_text())
     shutil.rmtree(STAGE, ignore_errors=True)
@@ -192,8 +210,9 @@ def main():
     content_url = f'https://github.com/{content["repository"]}'
     blob = f'{content_url}/blob/{content["commit"]}/'
     publisher_url = f'https://github.com/{PUBLISHER}/tree/{sha}'
+    content_label = f'{content["tag"]} ({content["commit"][:7]})' if content.get('tag') else content['commit'][:7]
     flags = (' · local changes' if dirty else '') + ('' if content['pinned'] else ' · content not at pinned revision')
-    identity = f'Docs: development · content {content["commit"][:7]} · publisher {sha[:7]}{flags}'
+    identity = f'Docs: development · content {content_label} · publisher {sha[:7]}{flags}'
     pages = {p['source']: p['path'] for p in site['pages']}
     licenses = {p['path']: p['license'] for p in site['pages']}
     tables = directory_tables(json.loads((content_root / site['directory']).read_text()))
@@ -253,16 +272,22 @@ def main():
                   'content': content, 'pages': sorted(p.replace('.md', '.html') for p in licenses),
                   'redirects': redirects, 'workflow_run': run}
     (source / 'build.json').write_text(json.dumps(provenance, indent=2) + '\n')
+    content_rev = (
+        f'[`{content["tag"]}`]({content_url}/releases/tag/{content["tag"]}) '
+        f'([`{content["commit"]}`]({content_url}/tree/{content["commit"]}))'
+        if content.get('tag') else
+        f'[`{content["commit"]}`]({content_url}/tree/{content["commit"]})'
+    )
     (source / 'source.md').write_text(f'''# Version and source
 
 **{identity}**
 
 | Role | Repository | Revision |
 | --- | --- | --- |
-| Content (authored) | [{content["repository"]}]({content_url}) | [`{content["commit"]}`]({content_url}/tree/{content["commit"]}) |
+| Content (authored) | [{content["repository"]}]({content_url}) | {content_rev} |
 | Publisher (build, theme, search) | [{PUBLISHER}](https://github.com/{PUBLISHER}) | [`{sha}`]({publisher_url}) |
 
-Content pinned by `content.lock.json`: **{content["pinned"]}**. Local content changes:
+Content pinned by `content.lock.json`: **{content["pinned"]}** (`{content["locked_tag"]}` at `{content["locked_commit"][:12]}`). Local content changes:
 **{content["dirty"]}**. Local publisher changes: **{dirty}**.
 [Machine-readable build identity](build.json) lists every source file and its sha256.
 When the pinned revision contains `docs/media/`, that record includes each media

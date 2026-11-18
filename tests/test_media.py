@@ -21,12 +21,13 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from build_docs import copy_content_media, media_digests  # noqa: E402
 from check_site import Page, main as check_site  # noqa: E402
 
-# Organization directory #86 merge; preserves the exact reviewed recording bytes.
-MERGED = '10c9f358a8ab7839db66592fe3fc895c66156152'
-# Reviewed pre-merge tip. The pin must be the merge commit, which has the same
+# Organization directory v1.0.0 release; preserves the exact reviewed recording bytes.
+TAG = 'v1.0.0'
+MERGED = '2ac1feaa06ab12193da2015cc6de73e373801811'
+# Reviewed pre-merge tip. The pin must be the release commit, which has the same
 # recording bytes; this constant is the commit the lock must not use.
 REVIEWED_TIP = 'adb1144c68d915e8331efa58b719c38cb6486427'
-# Unmerged tip of the NOTICE wording pull request. The lock uses the merge.
+# Unmerged tip of the NOTICE wording pull request. The lock uses the release.
 NOTICE_TIP = '942d173900079d1c070e8076b39501f50d481335'
 RECORDING = {
     'g1-comparison.mp4': '918330b81b9e4de5c6a5b9c5b3aa81de21c42e9ddd246c049e8b1acdb07ca0ca',
@@ -110,9 +111,12 @@ class BuiltRecording(unittest.TestCase):
         identity = json.loads((SITE / 'build.json').read_text())
         content = identity['content']
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
+        self.assertEqual(lock['tag'], TAG)
         self.assertEqual(lock['commit'], MERGED)
         self.assertNotEqual(lock['commit'], REVIEWED_TIP)
         self.assertNotEqual(lock['commit'], NOTICE_TIP)
+        self.assertEqual(content['tag'], TAG)
+        self.assertEqual(content['locked_tag'], TAG)
         self.assertEqual(content['commit'], MERGED)
         self.assertEqual(content['locked_commit'], MERGED)
         self.assertTrue(content['pinned'])
