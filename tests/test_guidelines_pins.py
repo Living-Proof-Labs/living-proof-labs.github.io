@@ -166,10 +166,13 @@ class GuidelinesPins(unittest.TestCase):
     def test_this_repository_does_not_opt_in_to_docs_brand_updates(self) -> None:
         # Proposed by Vera in the living-proof-labs.github.io#51 review.
         # v9.4.0 adds a docs-brand manager that stays disabled until a consumer
-        # opts in. This repo has a docs-brand.lock.json, but it does not enable
-        # custom.regex and it does not override that package rule.
+        # opts in. This repo enables regex for content only and does not override
+        # the disabled docs-brand package rule.
         config = json.loads((ROOT / "renovate.json").read_text())
-        self.assertNotIn("custom.regex", config.get("enabledManagers", []))
+        # Content tracking may use regex without opting into brand updates.
+        for manager in config.get("customManagers", []):
+            self.assertEqual(manager.get("managerFilePatterns"),
+                             [r"/^content\.lock\.json$/"])
         for rule in config.get("packageRules") or []:
             dumped = json.dumps(rule)
             if "docs-brand" in dumped or rule.get("matchDepTypes") == ["docs-brand"]:

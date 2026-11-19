@@ -17,7 +17,11 @@ published root pages, not other repositories' manuals.
 
 `content.lock.json` pins one released `.github` tag and its resolved commit. A
 content change merges and releases in `.github` first; a pull request here then
-moves the pin. `build.json` and every page record both the content and the
+moves the pin. Renovate tracks this lock with the `github-tags` datasource,
+updating the release tag and its commit digest together. Keep the lock fields in
+`repository`, `tag`, `commit` order for the regex manager. The pin and build checks
+still reject mismatched or unmerged releases; dependency updates require review.
+`build.json` and every page record both the content and the
 publisher revision. When that revision contains `docs/media/`, the build copies
 the whole directory into the site's `media/` path, including `NOTICE.txt`,
 without changing file bytes. A revision that has no `docs/media/` directory

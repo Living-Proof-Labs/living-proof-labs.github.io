@@ -21,9 +21,10 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from build_docs import copy_content_media, media_digests  # noqa: E402
 from check_site import Page, main as check_site  # noqa: E402
 
-# Organization directory v1.0.2 release; preserves the exact reviewed recording bytes.
-TAG = 'v1.0.2'
-MERGED = '9e273051d42bfc104744964c595a8f0aeb3650d1'
+# Current content release; recording hashes below remain historical evidence.
+CONTENT_LOCK = json.loads((ROOT / 'content.lock.json').read_text())
+TAG = CONTENT_LOCK['tag']
+MERGED = CONTENT_LOCK['commit']
 # Reviewed pre-merge tip. The pin must be the release commit, which has the same
 # recording bytes; this constant is the commit the lock must not use.
 REVIEWED_TIP = 'adb1144c68d915e8331efa58b719c38cb6486427'

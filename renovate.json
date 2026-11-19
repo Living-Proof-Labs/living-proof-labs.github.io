@@ -8,9 +8,24 @@
     "github-actions",
     "dockerfile",
     "pep621",
-    "renovate-config"
+    "renovate-config",
+    "custom.regex"
   ],
   "lockFileMaintenance": {
     "enabled": false
-  }
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the organization content release and its resolved commit together.",
+      "managerFilePatterns": [
+        "/^content\\.lock\\.json$/"
+      ],
+      "matchStrings": [
+        "\"repository\"\\s*:\\s*\"(?<depName>Living-Proof-Labs/\\.github)\"\\s*,\\s*\"tag\"\\s*:\\s*\"(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)\"\\s*,\\s*\"commit\"\\s*:\\s*\"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
+    }
+  ]
 }
