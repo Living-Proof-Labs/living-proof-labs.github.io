@@ -5,6 +5,7 @@ Run after task build, as task verify does. Missing artifacts must fail locally
 as well as in CI: skipping when the guide is absent would hide a regression.
 Assertions adapted from Vera's proposed patch in issue #67.
 """
+import html
 import json
 import re
 import unittest
@@ -33,6 +34,18 @@ class HtmlRoutes(unittest.TestCase):
         self.assertIn('href="reading-reports.html"', index)
         self.assertIn('href="./reading-reports.html"', index)
         self.assertNotRegex(index, r'href="(?:\./)?reading-reports/"')
+
+    def test_repeated_outcome_guidance_and_content_footer(self):
+        page = (SITE / 'reading-reports.html').read_text()
+        text = ' '.join(html.unescape(re.sub(r'<[^>]+>', ' ', page)).split())
+        for phrase in (
+            'repeated-outcome@1.0.0', '3 of 3 repeats agree',
+            'with no Wilson interval or threshold',
+            'applies to corner reports', '21–100%',
+        ):
+            self.assertIn(phrase, text)
+        lock = json.loads((ROOT / 'content.lock.json').read_text())
+        self.assertIn(f"content {lock['tag']} ({lock['commit'][:7]})", text)
 
     def test_guide_canonical_url_is_html_route(self):
         canonical = re.search(r'<link rel="canonical" href="([^"]+)"',

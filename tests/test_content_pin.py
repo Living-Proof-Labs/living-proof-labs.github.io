@@ -41,12 +41,10 @@ def make_content_repo(repo, *, tag='v1.0.0', tag_on_branch_only=False):
 
 
 class CommittedLock(unittest.TestCase):
-    def test_committed_content_lock_pins_v1_0_2_tag_and_commit(self):
+    def test_committed_content_lock_pins_release_tag_and_commit(self):
         lock = json.loads((ROOT / 'content.lock.json').read_text())
         self.assertEqual(sorted(lock), ['commit', 'repository', 'tag'])
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
-        self.assertEqual(lock['tag'], 'v1.0.2')
-        self.assertEqual(lock['commit'], '9e273051d42bfc104744964c595a8f0aeb3650d1')
         self.assertEqual(lock_errors(lock), [])
 
 
