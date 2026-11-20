@@ -11,15 +11,36 @@ from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 
+COMMIT_ID = re.compile(r"\b(?=[0-9]*[a-f])[0-9a-f]{7,40}\b")
+VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
 class Page(HTMLParser):
     def __init__(self, text):
         super().__init__()
         self.ids = set()
         self.links = []
+        self.identity_found = False
+        self.identity_attrs = []
+        self._identity_depth = 0
+        self._identity_text = []
         self.feed(text)
+
+    @property
+    def identity_text(self):
+        return " ".join("".join(self._identity_text).split())
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if self._identity_depth > 0:
+            if tag not in VOID_TAGS:
+                self._identity_depth += 1
+            for key in ("href", "title"):
+                if key in attrs:
+                    self.identity_attrs.append(attrs[key])
+        elif tag == "div" and "docs-identity" in (attrs.get("class") or "").split():
+            self.identity_found = True
+            self._identity_depth = 1
         if "id" in attrs:
             self.ids.add(attrs["id"])
         if tag in {"a", "link"} and "href" in attrs:
@@ -30,6 +51,14 @@ class Page(HTMLParser):
         # has to fail even when the MP4 link still resolves.
         if tag in {"video", "audio"} and "poster" in attrs:
             self.links.append(attrs["poster"])
+
+    def handle_endtag(self, tag):
+        if self._identity_depth > 0 and tag not in VOID_TAGS:
+            self._identity_depth -= 1
+
+    def handle_data(self, data):
+        if self._identity_depth > 0:
+            self._identity_text.append(data)
 
 
 def main(argv=None):
@@ -69,14 +98,34 @@ def main(argv=None):
                             content['locked_tag']), 'content locked_tag'
         if content.get('pinned'):
             assert content.get('tag') == content['locked_tag'], 'content tag'
-        for name in identity['pages']:
-            text = (root / name).read_text()
+        publisher_tag = publisher.get('tag')
+        if publisher_tag is not None:
+            assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+                                publisher_tag), 'publisher tag'
+        expected_content = content['tag'] if content.get('tag') else 'commit'
+        expected_publisher = publisher_tag if publisher_tag else 'commit'
+        expected_identity = f'Docs: development · content {expected_content} · publisher {expected_publisher}'
+        for name in sorted(set(identity['pages']) | {'source.html'}):
+            page = pages.get(root / name)
+            assert page is not None and page.identity_found, f'{name} is missing docs-identity'
+            visible = page.identity_text
+            assert expected_identity in visible, (
+                f'{name} docs-identity {visible!r} does not contain {expected_identity!r}'
+            )
+            assert not COMMIT_ID.findall(visible), (
+                f'{name} docs-identity shows commit ID in visible text: {visible!r}'
+            )
             for role, commit in (('publisher', publisher['commit']), ('content', content['commit'])):
-                assert commit[:7] in text, f'{name} does not show the {role} revision'
+                assert commit[:7] not in visible, f'{name} docs-identity shows short {role} SHA'
+                assert any(commit in attr for attr in page.identity_attrs), (
+                    f'{name} does not record the {role} full commit in href/title'
+                )
         source = (root / 'source.html').read_text()
         assert publisher['commit'] in source and content['commit'] in source, 'source.html revisions'
         if content.get('tag'):
             assert content['tag'] in source, 'source.html content tag'
+        if publisher_tag:
+            assert publisher_tag in source, 'source.html publisher tag'
     except (OSError, ValueError, KeyError, AssertionError) as error:
         identity = {}
         failures.append(f'Invalid or inconsistent build identity: {error}')
