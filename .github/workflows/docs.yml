@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag (vX.Y.Z) to retry deployment for this exact commit
+        required: false
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -98,11 +104,21 @@ jobs:
           test -f verified/site/.nojekyll
           tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
           tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
-  deploy:
+  release:
     needs: build
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
+    permissions:
+      contents: write
+    # Do not retarget published source tags; adopt updates through a new PR.
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9
+  deploy:
+    needs: [build, release]
+    if: >-
+      always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' &&
+      (needs.release.outputs.published == 'true' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       pages: write
       id-token: write
     concurrency:
@@ -111,8 +127,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    outputs:
-      deployed: ${{ steps.freshness.outputs.current == 'true' && steps.deployment.outcome == 'success' }}
+    env:
+      RELEASE_TAG: ${{ needs.release.outputs.git-tag || inputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.release.outputs.version }}
     steps:
       - name: Reject stale publication inside deployment lock
         id: freshness
@@ -128,41 +145,50 @@ jobs:
             echo 'current=false' >> "$GITHUB_OUTPUT"
             echo 'Skipped stale source revision.' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         if: steps.freshness.outputs.current == 'true'
         with:
-          name: root-documentation-review
-          path: verified
-      - name: Read the artifact validator and lock from the exact trusted publisher revision
+          ref: ${{ needs.release.outputs.git-tag || inputs.release_tag }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Require release tag to match the exact verified commit
         if: steps.freshness.outputs.current == 'true'
-        env:
-          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REPOSITORY" == 'Living-Proof-Labs/living-proof-labs.github.io' ]]
-          [[ "$PUBLISHER_SHA" =~ ^[0-9a-f]{40}$ ]]
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
-            [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
-          else
-            [[ "$GITHUB_EVENT_NAME" == 'push' || "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]
-            [[ "$GITHUB_REF" == 'refs/heads/main' && "$PUBLISHER_SHA" == "$GITHUB_SHA" ]]
-          fi
-          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
-          git -c core.hooksPath=/dev/null init publisher-check
-          git -C publisher-check -c credential.helper= -c core.hooksPath=/dev/null fetch --depth=1 \
-            https://github.com/Living-Proof-Labs/living-proof-labs.github.io.git "$PUBLISHER_SHA"
-          [[ "$(git -C publisher-check rev-parse FETCH_HEAD)" == "$PUBLISHER_SHA" ]]
-          git -C publisher-check -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
-      - name: Check identity and package only generated site
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$GITHUB_SHA"
+          echo "PUBLISHER_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "PUBLISHER_VERSION=${RELEASE_VERSION:-${RELEASE_TAG#v}}" >> "$GITHUB_ENV"
+      - name: Acquire and verify the reviewed content source
+        if: steps.freshness.outputs.current == 'true'
+        run: |
+          python3 tools/fetch_content.py
+          python3 tools/check_content_pin.py .content
+      - name: Fetch the pinned docs brand and check its tag and sha256
+        if: steps.freshness.outputs.current == 'true'
+        run: python3 tools/fetch_brand.py
+      - name: Build locked documentation environment
+        if: steps.freshness.outputs.current == 'true'
+        run: docker build --target development -t root-docs .
+      - name: Build and verify released site without network access
+        if: steps.freshness.outputs.current == 'true'
+        run: |
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            -e GITHUB_ACTIONS=true -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
+            -e PUBLISHER_TAG -e PUBLISHER_VERSION \
+            -v "$PWD:/workspace" root-docs task verify
+      - name: Seal and verify released site artifact
         if: steps.freshness.outputs.current == 'true'
         env:
-          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUBLISHER_SHA: ${{ github.sha }}
         run: |
-          python3 publisher-check/tools/check_artifact.py check verified
-          test -f verified/site/.nojekyll
-          tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
+          python3 tools/check_artifact.py seal artifacts
+          python3 tools/check_artifact.py check artifacts
+          test -f artifacts/site/.nojekyll
+          tar -C artifacts/site -cf "$RUNNER_TEMP/artifact.tar" .
           tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: steps.freshness.outputs.current == 'true'
@@ -174,10 +200,3 @@ jobs:
       - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
         if: steps.freshness.outputs.current == 'true'
         id: deployment
-  release:
-    needs: deploy
-    if: github.ref == 'refs/heads/main' && needs.deploy.outputs.deployed == 'true' && (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
-    permissions:
-      contents: write
-    # Do not retarget published source tags; adopt updates through a new PR.
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9
