@@ -6,7 +6,7 @@ and relevant procedures at that tag before work. The inspected tag resolves to
 52a2f274576dab20e96ee1152b6c8d187cfbf377.
 
 Keep this a small documentation directory. Manuals remain in their own repositories.
-Use Rivet's GitHub identity; never substitute another account.
+Use your own authorized GitHub identity; do not use another contributor's account.
 Use a draft pull request and independent agent review before merge.
 
 ## Bounded exceptions
