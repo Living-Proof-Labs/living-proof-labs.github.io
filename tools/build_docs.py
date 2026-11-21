@@ -212,10 +212,16 @@ def main():
     source.mkdir(parents=True)
     content_url = f'https://github.com/{content["repository"]}'
     blob = f'{content_url}/blob/{content["commit"]}/'
-    publisher_url = f'https://github.com/{PUBLISHER}/tree/{sha}'
+    publisher_tag = os.environ.get('PUBLISHER_TAG', '').strip()
+    publisher_version = os.environ.get('PUBLISHER_VERSION', '').strip()
+    publisher_url = (f'https://github.com/{PUBLISHER}/releases/tag/{publisher_tag}'
+                     if publisher_tag else f'https://github.com/{PUBLISHER}/tree/{sha}')
     content_label = f'{content["tag"]} ({content["commit"][:7]})' if content.get('tag') else content['commit'][:7]
     flags = (' · local changes' if dirty else '') + ('' if content['pinned'] else ' · content not at pinned revision')
-    identity = f'Docs: development · content {content_label} · publisher {sha[:7]}{flags}'
+    if publisher_tag and not dirty:
+        identity = f'Docs: {publisher_tag} · content {content_label} · publisher {publisher_tag} ({sha[:7]}){flags}'
+    else:
+        identity = f'Docs: development · content {content_label} · publisher {sha[:7]}{flags}'
     pages = {p['source']: p['path'] for p in site['pages']}
     licenses = {p['path']: p['license'] for p in site['pages']}
     tables = directory_tables(json.loads((content_root / site['directory']).read_text()))
@@ -273,10 +279,15 @@ def main():
     redirects = site.get('redirects', {})
     generator_name, generator_version = installed_zensical()
     generator_label = generator_name[:1].upper() + generator_name[1:]
+    publisher_info = {'repository': PUBLISHER, 'commit': sha, 'dirty': dirty,
+                      'source_files': publisher_files}
+    if publisher_tag and not dirty:
+        publisher_info['tag'] = publisher_tag
+    if publisher_version and not dirty:
+        publisher_info['version'] = publisher_version
     provenance = {'source_commit': sha, 'source_dirty': dirty,
                   'generator': f'{generator_name}=={generator_version}',
-                  'publisher': {'repository': PUBLISHER, 'commit': sha, 'dirty': dirty,
-                                'source_files': publisher_files},
+                  'publisher': publisher_info,
                   'content': content, 'pages': sorted(p.replace('.md', '.html') for p in licenses),
                   'redirects': redirects, 'workflow_run': run,
                   'workflow_attempt': os.environ.get('GITHUB_RUN_ATTEMPT')}

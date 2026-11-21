@@ -203,14 +203,6 @@ class DeployWorkflow(unittest.TestCase):
         self.assertEqual(proof['needs'], 'build')
         self.assertIn("github.event_name == 'pull_request'", proof['if'])
         self.assertNotIn('permissions', proof)
-        for name in ['Read the artifact validator and lock from the exact trusted publisher revision',
-                     'Check identity and package only generated site']:
-            deploy_step = next(step for step in steps if step.get('name') == name)
-            proof_step = next(step for step in proof['steps'] if step.get('name') == name)
-            self.assertEqual(deploy_step['run'], proof_step['run'])
-            self.assertEqual(deploy_step['env'], proof_step['env'])
-            self.assertEqual(deploy_step['if'], "steps.freshness.outputs.current == 'true'")
-            subprocess.run(['bash', '-n'], input=proof_step['run'], text=True, check=True)
         checkout = proof['steps'][1]['run']
         self.assertIn('credential.helper=', checkout)
         self.assertIn('GIT_CONFIG_GLOBAL=/dev/null', checkout)
@@ -222,28 +214,29 @@ class DeployWorkflow(unittest.TestCase):
         self.assertIn('publisher-check/tools/check_artifact.py check verified', packaging)
         self.assertIn('test -f verified/site/.nojekyll', packaging)
         self.assertNotIn('--dereference', packaging)
-        self.assertEqual(self.workflow['jobs']['deploy']['needs'], 'build')
         seal = next(step for step in self.workflow['jobs']['build']['steps']
                     if 'check_artifact.py seal' in step.get('run', ''))
         self.assertEqual(seal['env']['PUBLISHER_SHA'], '${{ github.event.pull_request.head.sha || github.sha }}')
+        verify_tag = next(step for step in steps if step.get('name') == 'Require release tag to match the exact verified commit')
+        self.assertIn('git rev-parse "${RELEASE_TAG}^{commit}"', verify_tag['run'])
+        self.assertIn('PUBLISHER_TAG=$RELEASE_TAG', verify_tag['run'])
 
-    def test_release_runs_only_after_actual_deploy_and_never_on_skip_or_failure(self):
+    def test_release_runs_before_deploy_and_deploy_requires_published_or_retry_tag(self):
         self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
-        deploy = self.workflow['jobs']['deploy']
-        self.assertEqual(
-            deploy['outputs']['deployed'],
-            "${{ steps.freshness.outputs.current == 'true' && steps.deployment.outcome == 'success' }}",
-        )
         release = self.workflow['jobs']['release']
-        self.assertEqual(release['needs'], 'deploy')
+        self.assertEqual(release['needs'], 'build')
         self.assertEqual(release['permissions'], {'contents': 'write'})
         self.assertIn("github.ref == 'refs/heads/main'", release['if'])
-        self.assertIn("needs.deploy.outputs.deployed == 'true'", release['if'])
         self.assertIn("vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true'", release['if'])
         self.assertEqual(
             release['uses'],
             'Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9',
         )
+        deploy = self.workflow['jobs']['deploy']
+        self.assertEqual(deploy['needs'], ['build', 'release'])
+        self.assertIn("needs.build.result == 'success'", deploy['if'])
+        self.assertIn("needs.release.outputs.published == 'true'", deploy['if'])
+        self.assertIn("inputs.release_tag != ''", deploy['if'])
 
 
 if __name__ == '__main__':
