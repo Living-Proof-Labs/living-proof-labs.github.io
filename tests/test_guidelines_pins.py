@@ -43,7 +43,7 @@ ROOT = _root()
 
 
 def workflow_path() -> Path | None:
-    for name in (".github/workflows/verify.yml", ".github/workflows/release.yml"):
+    for name in (".github/workflows/verify.yml", ".github/workflows/release.yml", ".github/workflows/docs.yml"):
         path = ROOT / name
         if path.is_file() and USES.search(path.read_text()):
             return path
