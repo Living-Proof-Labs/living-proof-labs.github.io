@@ -15,6 +15,7 @@ import sys
 from check_content_pin import lock_errors
 from docs_payload import MODE, REPOSITORY, hex_digest, read_json, require
 from docs_source import REQUIRED_JOBS, WORKFLOW, positive, verify_evidence
+from publisher_release_identity import validate_version
 
 PUBLISHER = 'Living-Proof-Labs/living-proof-labs.github.io'
 
@@ -88,13 +89,20 @@ def inventory(site):
     return files
 
 
-def artifact(action, root, lock, publisher_sha, run_id, run_attempt='1'):
+def artifact(action, root, lock, publisher_sha, run_id, run_attempt='1', *, publisher_version=''):
     root = Path(root)
     files = inventory(root / 'site')
     identity = json.loads((root / 'site/build.json').read_text())
     check_identity(identity, lock, publisher_sha, run_id, run_attempt)
     expected = {'publisher_commit': publisher_sha, 'workflow_run': run_id, 'workflow_attempt': run_attempt,
                 'content_lock': lock, 'files': files}
+    if publisher_version:
+        validate_version(publisher_version)
+        require(identity['publisher'].get('version') == publisher_version,
+                'publisher version differs from the shared plan')
+        expected['publisher_version'] = publisher_version
+    else:
+        require('version' not in identity['publisher'], 'unexpected version in an unversioned artifact')
     if lock.get('mode') == MODE:
         receipt = root / 'content-provenance.json'
         require(receipt.is_file() and not receipt.is_symlink(), 'missing or linked content provenance')
@@ -111,12 +119,23 @@ def artifact(action, root, lock, publisher_sha, run_id, run_attempt='1'):
     else:
         require(action == 'check' and seal.is_file() and not seal.is_symlink(), 'missing artifact manifest')
         require(seal.read_bytes() == canonical(expected), 'artifact manifest/bytes mismatch')
+    return expected
+
+
+def emit_seal_outputs(seal, output):
+    # Pass the already-validated manifest identity, not a separately inferred label.
+    version = validate_version(seal.get('publisher_version'))
+    with open(output, 'a', encoding='utf-8') as handle:
+        print(f"version={version}\ncommit={seal['publisher_commit']}\n"
+              f"run-id={seal['workflow_run']}\nattempt={seal['workflow_attempt']}", file=handle)
 
 
 if __name__ == '__main__':
     require(len(sys.argv) == 3 and sys.argv[1] in {'seal', 'check'},
             'usage: check_artifact.py seal|check ARTIFACT_DIRECTORY')
     lock = json.loads((Path(__file__).resolve().parents[1] / 'content.lock.json').read_text())
-    artifact(sys.argv[1], sys.argv[2], lock, os.environ.get('PUBLISHER_SHA') or os.environ['GITHUB_SHA'],
-             os.environ['GITHUB_RUN_ID'],
-             os.environ['GITHUB_RUN_ATTEMPT'])
+    seal = artifact(sys.argv[1], sys.argv[2], lock, os.environ.get('PUBLISHER_SHA') or os.environ['GITHUB_SHA'],
+                    os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'],
+                    publisher_version=os.environ.get('PUBLISHER_VERSION', ''))
+    if sys.argv[1] == 'seal' and (output := os.environ.get('GITHUB_OUTPUT')):
+        emit_seal_outputs(seal, output)

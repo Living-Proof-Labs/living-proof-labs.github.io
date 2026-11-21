@@ -5,10 +5,30 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag (vX.Y.Z) for exact-current-main delivery retry
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
+  version:
+    permissions:
+      contents: read
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release-candidate.yml@v9.9.1
+    with:
+      replay-tag: ${{ inputs.release_tag || '' }}
   build:
+    needs: version
+    outputs:
+      artifact-version: ${{ steps.seal.outputs.version }}
+      artifact-commit: ${{ steps.seal.outputs.commit }}
+      artifact-run-id: ${{ steps.seal.outputs.run-id }}
+      artifact-attempt: ${{ steps.seal.outputs.attempt }}
+    env:
+      PUBLISHER_SHA: ${{ needs.version.outputs.commit }}
+      PUBLISHER_VERSION: ${{ needs.version.outputs.semver-version }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -16,6 +36,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Require the exact shared version plan for this build attempt
+        env:
+          EXPECTED_PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PLAN_RUN_ID: ${{ needs.version.outputs.run-id }}
+          PLAN_RUN_ATTEMPT: ${{ needs.version.outputs.run-attempt }}
+        run: python3 tools/publisher_release_identity.py check-plan
       - name: Acquire and verify the reviewed content source
         run: |
           python3 tools/fetch_content.py
@@ -28,10 +54,10 @@ jobs:
         run: |
           docker run --rm --network none --user "$(id -u):$(id -g)" \
             -e GITHUB_ACTIONS=true -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
+            -e PUBLISHER_SHA -e PUBLISHER_VERSION \
             -v "$PWD:/workspace" root-docs task verify
       - name: Bind verified site bytes to this publisher revision and run
-        env:
-          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        id: seal
         run: python3 tools/check_artifact.py seal artifacts
       - name: Publish individual test outcomes in the job summary
         if: ${{ !cancelled() }}
@@ -52,7 +78,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ !cancelled() }}
         with:
-          name: root-documentation-review
+          name: root-documentation-review-${{ github.run_attempt }}
           include-hidden-files: true
           path: |
             artifacts/site/
@@ -62,12 +88,15 @@ jobs:
           if-no-files-found: error
   verify-transport:
     needs: build
+    env:
+      PUBLISHER_SHA: ${{ needs.build.outputs.artifact-commit }}
+      PUBLISHER_VERSION: ${{ needs.build.outputs.artifact-version }}
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: root-documentation-review
+          name: root-documentation-review-${{ github.run_attempt }}
           path: verified
       - name: Read the artifact validator and lock from the exact trusted publisher revision
         env:
@@ -91,18 +120,46 @@ jobs:
           [[ "$(git -C publisher-check rev-parse FETCH_HEAD)" == "$PUBLISHER_SHA" ]]
           git -C publisher-check -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
       - name: Check identity and package only generated site
-        env:
-          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python3 publisher-check/tools/check_artifact.py check verified
           test -f verified/site/.nojekyll
           tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
           tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
+  release:
+    needs: [version, build]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.version.outputs.git-tag != '' &&
+      needs.version.outputs.version == needs.build.outputs.artifact-version &&
+      needs.version.outputs.commit == needs.build.outputs.artifact-commit &&
+      needs.build.outputs.artifact-run-id == github.run_id &&
+      needs.build.outputs.artifact-attempt == github.run_attempt &&
+      (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
+    permissions:
+      contents: write
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.9.1
+    with:
+      expected-version: ${{ needs.build.outputs.artifact-version }}
+      expected-commit: ${{ needs.build.outputs.artifact-commit }}
   deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [version, build, release]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.version.result == 'success' && needs.build.result == 'success' &&
+      needs.build.outputs.artifact-run-id == github.run_id &&
+      needs.build.outputs.artifact-attempt == github.run_attempt &&
+      ((github.event_name == 'push' && needs.release.result == 'success' &&
+        needs.release.outputs.published == 'true') ||
+       (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
+    env:
+      PUBLISHER_SHA: ${{ needs.build.outputs.artifact-commit }}
+      PUBLISHER_VERSION: ${{ needs.build.outputs.artifact-version }}
+      PUBLISHER_TAG: ${{ needs.release.outputs.git-tag || inputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.release.outputs.version }}
+      RELEASE_COMMIT: ${{ needs.release.outputs.commit }}
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       pages: write
       id-token: write
     concurrency:
@@ -111,8 +168,6 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    outputs:
-      deployed: ${{ steps.freshness.outputs.current == 'true' && steps.deployment.outcome == 'success' }}
     steps:
       - name: Reject stale publication inside deployment lock
         id: freshness
@@ -131,7 +186,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         if: steps.freshness.outputs.current == 'true'
         with:
-          name: root-documentation-review
+          name: root-documentation-review-${{ github.run_attempt }}
           path: verified
       - name: Read the artifact validator and lock from the exact trusted publisher revision
         if: steps.freshness.outputs.current == 'true'
@@ -155,10 +210,14 @@ jobs:
             https://github.com/Living-Proof-Labs/living-proof-labs.github.io.git "$PUBLISHER_SHA"
           [[ "$(git -C publisher-check rev-parse FETCH_HEAD)" == "$PUBLISHER_SHA" ]]
           git -C publisher-check -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+      - name: Recheck published tag and exact publisher commit inside deployment lock
+        if: steps.freshness.outputs.current == 'true'
+        working-directory: publisher-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publisher_release_identity.py check-release
       - name: Check identity and package only generated site
         if: steps.freshness.outputs.current == 'true'
-        env:
-          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python3 publisher-check/tools/check_artifact.py check verified
           test -f verified/site/.nojekyll
@@ -167,17 +226,12 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: steps.freshness.outputs.current == 'true'
         with:
-          name: github-pages
+          name: github-pages-${{ github.run_attempt }}
           path: ${{ runner.temp }}/artifact.tar
           retention-days: 1
           if-no-files-found: error
       - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
         if: steps.freshness.outputs.current == 'true'
         id: deployment
-  release:
-    needs: deploy
-    if: github.ref == 'refs/heads/main' && needs.deploy.outputs.deployed == 'true' && (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
-    permissions:
-      contents: write
-    # Do not retarget published source tags; adopt updates through a new PR.
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}

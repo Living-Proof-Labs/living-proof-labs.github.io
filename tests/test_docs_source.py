@@ -64,6 +64,66 @@ class TrustedSource(unittest.TestCase):
                 with mock.patch.dict(os.environ, {name: 'other'}), self.assertRaisesRegex(ValueError, 'overrides'):
                     acquire(pin(blobs), Path(directory) / 'content', get)
 
+    def test_public_request_count_keeps_three_fresh_evidence_reads(self):
+        _, blobs = fixture()
+        for number in range(10):
+            blobs[f'docs/media/fixture-{number}.txt'] = ('100644', f'fixture {number}'.encode())
+        original, _ = api_fixture(blobs, evidence())
+        calls = []
+        def get(path, **kwargs):
+            calls.append(path)
+            return original(path, **kwargs)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'content'
+            lock = pin(blobs)
+            acquire(lock, target, get)
+            self.assertEqual(len(calls), 20)  # 13 blobs + tree + two three-request checks.
+            projection_identity(lock, target)
+            source_evidence(COMMIT, get)  # The separate pin check is still fresh.
+            self.assertEqual(len(calls), 23)
+            self.assertEqual(calls.count(PREFIX + '/branches/main'), 3)
+            self.assertEqual(sum('/actions/workflows/' in path for path in calls), 3)
+            self.assertEqual(sum('/attempts/' in path for path in calls), 3)
+            self.assertFalse(any('/compare/' in path for path in calls))
+            self.assertNotIn(PREFIX + '/actions/runs/123', calls)
+
+    def test_older_pin_still_requires_independent_ancestry_response(self):
+        _, blobs = fixture()
+        proof = evidence()
+        proof['branch']['commit']['sha'] = 'b' * 40
+        original, objects = api_fixture(blobs, proof)
+        path = PREFIX + f'/compare/{COMMIT}...' + 'b' * 40
+        calls = []
+        objects[path] = dict(proof['comparison'], status='ahead')
+        def get(url, **kwargs):
+            calls.append(url)
+            return original(url, **kwargs)
+        source_evidence(COMMIT, get)
+        self.assertEqual(len(calls), 4)
+        self.assertIn(path, calls)
+        objects[path]['status'] = 'diverged'
+        with self.assertRaisesRegex(ValueError, 'ancestor'):
+            source_evidence(COMMIT, get)
+
+    def test_incomplete_listing_and_rate_limit_fail_closed(self):
+        _, blobs = fixture()
+        original, _ = api_fixture(blobs, evidence())
+        def incomplete(path, **kwargs):
+            if '/actions/workflows/' in path:
+                return {'total_count': 1, 'workflow_runs': [{'id': 123}]}
+            return original(path, **kwargs)
+        with self.assertRaises(ValueError):
+            source_evidence(COMMIT, incomplete)
+        from urllib.error import HTTPError
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'content'
+            get = mock.Mock(side_effect=HTTPError('https://api.github.com/', 403,
+                                                 'rate limit', {}, None))
+            with self.assertRaises(HTTPError):
+                acquire(pin(blobs), target, get)
+            self.assertFalse(target.exists())
+            self.assertEqual(get.call_count, 1)
+
     def test_docs_success_is_independent_of_red_audit_and_aggregate(self):
         result = verify_evidence(COMMIT, evidence())
         self.assertEqual(result['run_id'], 123)
@@ -98,7 +158,8 @@ class TrustedSource(unittest.TestCase):
         original, _ = api_fixture(blobs, evidence())
         def get(path, **kwargs):
             if '/actions/workflows/' in path:
-                return {'total_count': 2, 'workflow_runs': [{'id': 123}, {'id': 124}]}
+                return {'total_count': 2, 'workflow_runs': [evidence()['run'],
+                        dict(evidence()['run'], id=124, status='in_progress')]}
             if path.endswith('/actions/runs/124'):
                 return dict(evidence()['run'], id=124, status='in_progress')
             if '/runs/124/attempts/' in path:

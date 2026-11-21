@@ -53,7 +53,7 @@ class ArtifactIdentity(unittest.TestCase):
     def test_scoped_transport_preserves_nojekyll_and_exact_seal(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/docs.yml').read_text())
         upload = next(s for s in workflow['jobs']['build']['steps']
-                      if s.get('with', {}).get('name') == 'root-documentation-review')['with']
+                      if s.get('with', {}).get('name') == 'root-documentation-review-${{ github.run_attempt }}')['with']
         self.assertTrue(upload['include-hidden-files'])
         self.assertEqual(upload['path'].splitlines(),
                          ['artifacts/site/', 'artifacts/site-manifest.json',
@@ -84,7 +84,7 @@ class ArtifactIdentity(unittest.TestCase):
             shutil.copytree(ROOT / 'tools', validator / 'tools')
             (validator / 'content.lock.json').write_text(json.dumps(LEGACY))
             package = workflow['jobs']['verify-transport']['steps'][-1]['run']
-            env = dict(os.environ, PUBLISHER_SHA=SHA, GITHUB_SHA=SHA,
+            env = dict(os.environ, PUBLISHER_SHA=SHA, GITHUB_SHA=SHA, PUBLISHER_VERSION='',
                        GITHUB_RUN_ID=RUN, GITHUB_RUN_ATTEMPT='1', RUNNER_TEMP=tmp)
             subprocess.run(['bash', '-eu', '-c', package], cwd=tmp, env=env,
                            capture_output=True, text=True, check=True)
@@ -203,14 +203,6 @@ class DeployWorkflow(unittest.TestCase):
         self.assertEqual(proof['needs'], 'build')
         self.assertIn("github.event_name == 'pull_request'", proof['if'])
         self.assertNotIn('permissions', proof)
-        for name in ['Read the artifact validator and lock from the exact trusted publisher revision',
-                     'Check identity and package only generated site']:
-            deploy_step = next(step for step in steps if step.get('name') == name)
-            proof_step = next(step for step in proof['steps'] if step.get('name') == name)
-            self.assertEqual(deploy_step['run'], proof_step['run'])
-            self.assertEqual(deploy_step['env'], proof_step['env'])
-            self.assertEqual(deploy_step['if'], "steps.freshness.outputs.current == 'true'")
-            subprocess.run(['bash', '-n'], input=proof_step['run'], text=True, check=True)
         checkout = proof['steps'][1]['run']
         self.assertIn('credential.helper=', checkout)
         self.assertIn('GIT_CONFIG_GLOBAL=/dev/null', checkout)
@@ -222,28 +214,67 @@ class DeployWorkflow(unittest.TestCase):
         self.assertIn('publisher-check/tools/check_artifact.py check verified', packaging)
         self.assertIn('test -f verified/site/.nojekyll', packaging)
         self.assertNotIn('--dereference', packaging)
-        self.assertEqual(self.workflow['jobs']['deploy']['needs'], 'build')
-        seal = next(step for step in self.workflow['jobs']['build']['steps']
-                    if 'check_artifact.py seal' in step.get('run', ''))
-        self.assertEqual(seal['env']['PUBLISHER_SHA'], '${{ github.event.pull_request.head.sha || github.sha }}')
+        deployment_packaging = next(s['run'] for s in steps if s.get('name') ==
+                                    'Check identity and package only generated site')
+        self.assertEqual(packaging, deployment_packaging)
+        self.assertEqual(proof['steps'][0]['with']['name'], 'root-documentation-review-${{ github.run_attempt }}')
+        self.assertEqual(next(s for s in steps if 'actions/download-artifact' in s.get('uses', ''))
+                         ['with']['name'], proof['steps'][0]['with']['name'])
+        self.assertTrue(any('publisher_release_identity.py check-release' in s.get('run', '') for s in steps))
+        self.assertFalse(any('docker' in s.get('run', '') or 'fetch_content' in s.get('run', '') for s in steps))
 
-    def test_release_runs_only_after_actual_deploy_and_never_on_skip_or_failure(self):
+    def test_one_shared_build_input_and_production_gates(self):
         self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
-        deploy = self.workflow['jobs']['deploy']
-        self.assertEqual(
-            deploy['outputs']['deployed'],
-            "${{ steps.freshness.outputs.current == 'true' && steps.deployment.outcome == 'success' }}",
-        )
-        release = self.workflow['jobs']['release']
-        self.assertEqual(release['needs'], 'deploy')
+        jobs = self.workflow['jobs']
+        pin = 'v9.9.1'
+        version, build, release, deploy = (jobs[k] for k in ('version', 'build', 'release', 'deploy'))
+        prefix = 'Living-Proof-Labs/collaboration-guidelines/.github/workflows/'
+        self.assertEqual(version['uses'], f'{prefix}semantic-release-candidate.yml@{pin}')
+        self.assertEqual(version['permissions'], {'contents': 'read'})
+        self.assertEqual(build['needs'], 'version')
+        self.assertEqual(build['env'], {
+            'PUBLISHER_SHA': '${{ needs.version.outputs.commit }}',
+            'PUBLISHER_VERSION': '${{ needs.version.outputs.semver-version }}',
+        })
+        self.assertTrue(any('publisher_release_identity.py check-plan' in s.get('run', '') for s in build['steps']))
+        self.assertEqual(sum('root-docs task verify' in s.get('run', '') for s in build['steps']), 1)
+        for step in build['steps']:
+            for term in ('PUBLISHER_TAG', 'git-tag', 'needs.release', 'check-release'):
+                self.assertNotIn(term, str(step))
+        self.assertEqual(release['needs'], ['version', 'build'])
         self.assertEqual(release['permissions'], {'contents': 'write'})
+        self.assertIn("github.event_name == 'push'", release['if'])
         self.assertIn("github.ref == 'refs/heads/main'", release['if'])
-        self.assertIn("needs.deploy.outputs.deployed == 'true'", release['if'])
-        self.assertIn("vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true'", release['if'])
-        self.assertEqual(
-            release['uses'],
-            'Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9',
-        )
+        self.assertIn("needs.version.outputs.git-tag != ''", release['if'])
+        self.assertIn('needs.version.outputs.version == needs.build.outputs.artifact-version', release['if'])
+        self.assertIn('needs.version.outputs.commit == needs.build.outputs.artifact-commit', release['if'])
+        self.assertEqual(release['with'], {
+            'expected-version': '${{ needs.build.outputs.artifact-version }}',
+            'expected-commit': '${{ needs.build.outputs.artifact-commit }}',
+        })
+        for job in (jobs['verify-transport'], deploy):
+            self.assertEqual(job['env']['PUBLISHER_VERSION'], release['with']['expected-version'])
+            self.assertEqual(job['env']['PUBLISHER_SHA'], release['with']['expected-commit'])
+        for job in (release, deploy):
+            self.assertIn('needs.build.outputs.artifact-run-id == github.run_id', job['if'])
+            self.assertIn('needs.build.outputs.artifact-attempt == github.run_attempt', job['if'])
+        self.assertEqual(build['outputs'], {
+            'artifact-version': '${{ steps.seal.outputs.version }}',
+            'artifact-commit': '${{ steps.seal.outputs.commit }}',
+            'artifact-run-id': '${{ steps.seal.outputs.run-id }}',
+            'artifact-attempt': '${{ steps.seal.outputs.attempt }}',
+        })
+        seal = next(step for step in build['steps'] if step.get('id') == 'seal')
+        self.assertEqual(seal['run'], 'python3 tools/check_artifact.py seal artifacts')
+        self.assertEqual(release['uses'], f'{prefix}semantic-release.yml@{pin}')
+        self.assertEqual(deploy['needs'], ['version', 'build', 'release'])
+        self.assertIn("needs.build.result == 'success'", deploy['if'])
+        self.assertIn("needs.release.result == 'success'", deploy['if'])
+        self.assertIn("needs.release.outputs.published == 'true'", deploy['if'])
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.release_tag != ''", deploy['if'])
+        artifact_name = 'github-pages-${{ github.run_attempt }}'
+        self.assertEqual(deploy['steps'][-2]['with']['name'], artifact_name)
+        self.assertEqual(deploy['steps'][-1]['with']['artifact_name'], artifact_name)
 
 
 if __name__ == '__main__':
