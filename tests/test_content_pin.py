@@ -41,11 +41,14 @@ def make_content_repo(repo, *, tag='v1.0.0', tag_on_branch_only=False):
 
 
 class CommittedLock(unittest.TestCase):
-    def test_committed_content_lock_pins_release_tag_and_commit(self):
+    def test_committed_content_lock_pins_a_supported_exact_source(self):
         lock = json.loads((ROOT / 'content.lock.json').read_text())
-        self.assertEqual(sorted(lock), ['commit', 'repository', 'tag'])
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
         self.assertEqual(lock_errors(lock), [])
+        if lock.get('mode') == 'documentation-v1':
+            self.assertEqual(set(lock), {'mode', 'repository', 'commit', 'manifest_sha256'})
+        else:
+            self.assertEqual(set(lock), {'repository', 'tag', 'commit'})
 
 
 class PinReachability(unittest.TestCase):

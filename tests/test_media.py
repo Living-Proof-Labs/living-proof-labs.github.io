@@ -19,16 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / 'artifacts' / 'site'
 sys.path.insert(0, str(ROOT / 'tools'))
 from build_docs import copy_content_media, media_digests  # noqa: E402
+from check_artifact import check_docs_identity  # noqa: E402
 from check_site import Page, main as check_site  # noqa: E402
 
-# Current content release; recording hashes below remain historical evidence.
-CONTENT_LOCK = json.loads((ROOT / 'content.lock.json').read_text())
-TAG = CONTENT_LOCK['tag']
-MERGED = CONTENT_LOCK['commit']
-# Reviewed pre-merge tip. The pin must be the release commit, which has the same
-# recording bytes; this constant is the commit the lock must not use.
+# Reviewed pre-merge tip. The pin must not identify this unmerged revision
+# even though it has the same recording bytes.
 REVIEWED_TIP = 'adb1144c68d915e8331efa58b719c38cb6486427'
-# Unmerged tip of the NOTICE wording pull request. The lock uses the release.
+# Unmerged tip of the NOTICE wording pull request.
 NOTICE_TIP = '942d173900079d1c070e8076b39501f50d481335'
 RECORDING = {
     'g1-comparison.mp4': '918330b81b9e4de5c6a5b9c5b3aa81de21c42e9ddd246c049e8b1acdb07ca0ca',
@@ -112,14 +109,17 @@ class BuiltRecording(unittest.TestCase):
         identity = json.loads((SITE / 'build.json').read_text())
         content = identity['content']
         self.assertEqual(lock['repository'], 'Living-Proof-Labs/.github')
-        self.assertEqual(lock['tag'], TAG)
-        self.assertEqual(lock['commit'], MERGED)
+        self.assertEqual(content['repository'], lock['repository'])
         self.assertNotEqual(lock['commit'], REVIEWED_TIP)
         self.assertNotEqual(lock['commit'], NOTICE_TIP)
-        self.assertEqual(content['tag'], TAG)
-        self.assertEqual(content['locked_tag'], TAG)
-        self.assertEqual(content['commit'], MERGED)
-        self.assertEqual(content['locked_commit'], MERGED)
+        self.assertEqual(content['commit'], lock['commit'])
+        self.assertEqual(content['locked_commit'], lock['commit'])
+        if lock.get('mode') == 'documentation-v1':
+            self.assertEqual(content['manifest_sha256'], lock['manifest_sha256'])
+            check_docs_identity(content)  # Also checks absent tags and exact source-check provenance.
+        else:
+            self.assertEqual(content['tag'], lock['tag'])
+            self.assertEqual(content['locked_tag'], lock['tag'])
         self.assertTrue(content['pinned'])
         self.assertFalse(content['dirty'])
         self.assertEqual(content['media_files'], RECORDING)
