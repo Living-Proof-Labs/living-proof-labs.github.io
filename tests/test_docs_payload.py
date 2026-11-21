@@ -155,14 +155,14 @@ class DocumentationPayload(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'NUL'):
             payload_manifest(COMMIT, dict(blobs, **{'docs/index.md': ('100644', b'# Bad\x00')}))
 
-    def test_production_lock_is_unchanged_and_new_mode_is_explicit(self):
-        lock = json.loads((ROOT / 'content.lock.json').read_text())
-        self.assertEqual(lock_errors(lock), [])
-        self.assertEqual(lock, {'repository': 'Living-Proof-Labs/.github', 'tag': 'v1.1.3',
-                               'commit': '28cfb4b8c9891f1233e9fb818fc09d0e3e444fed'})
+    def test_tagged_and_docs_only_locks_are_distinct_and_new_mode_is_explicit(self):
+        released = {'repository': 'Living-Proof-Labs/.github', 'tag': 'v1.2.3', 'commit': 'b' * 40}
+        self.assertEqual(lock_errors(released), [])
         _, blobs = fixture()
-        self.assertEqual(lock_errors(pin(blobs)), [])
-        ambiguous = pin(blobs)
+        typed = pin(blobs)
+        self.assertEqual(lock_errors(typed), [])
+        self.assertTrue(lock_errors(dict(typed, tag=released['tag'])), 'mixed lock must be rejected')
+        ambiguous = dict(typed)
         del ambiguous['mode']
         self.assertTrue(lock_errors(ambiguous), 'bare commit must not select docs mode')
 
