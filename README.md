@@ -21,6 +21,10 @@ moves the pin. Renovate tracks this lock with the `github-tags` datasource,
 updating the release tag and its commit digest together. Keep the lock fields in
 `repository`, `tag`, `commit` order for the regex manager. The pin and build checks
 still reject mismatched or unmerged releases; dependency updates require review.
+A separately reviewed `documentation-v1` mode can instead project only docs data
+from an exact protected-main commit with successful source documentation checks.
+See [the docs-only source contract](docs/docs-only-support-draft.md). The committed
+production lock is unchanged; this is not an automatic mode switch or audit bypass.
 `build.json` and every page record both the content and the
 publisher revision. When that revision contains `docs/media/`, the build copies
 the whole directory into the site's `media/` path, including `NOTICE.txt`,
@@ -78,7 +82,9 @@ builds PR previews with `contents: read`; only the separate trusted-main deploy
 job has `pages: write` and `id-token: write`. It checks freshness inside the
 publication lock, verifies the publisher commit and that content is at the
 locked, clean `.github` commit, and deploys the successful run's site.
-The deploy job does not check out or execute project code.
+The deploy job checks out the exact trusted publisher revision only to run its
+artifact validator against its reviewed lock. It never executes upstream content
+or code from the downloaded artifact.
 
 Review artifacts expire after 14 days; the one-day Pages transfer artifact is
 transport, not a public download promise. The live manual remains published.

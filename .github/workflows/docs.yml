@@ -16,33 +16,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Read the pinned organization content revision
-        id: content
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, sys
-          sys.path.insert(0, 'tools')
-          from check_content_pin import lock_errors
-          lock = json.load(open('content.lock.json'))
-          errors = lock_errors(lock)
-          if errors:
-              raise SystemExit('\n'.join(errors))
-          print(f"repository={lock['repository']}")
-          print(f"tag={lock['tag']}")
-          print(f"commit={lock['commit']}")
-          PY
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: ${{ steps.content.outputs.repository }}
-          ref: refs/tags/${{ steps.content.outputs.tag }}
-          path: .content
-          fetch-depth: 0
-          fetch-tags: true
-          persist-credentials: false
-      - name: Require the pinned content tag to match its commit and be merged into .github main
+      - name: Acquire and verify the reviewed content source
         env:
-          CONTENT_MAIN_REF: refs/remotes/origin/main
-        run: python3 tools/check_content_pin.py .content
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/fetch_content.py
+          python3 tools/check_content_pin.py .content
       - name: Fetch the pinned docs brand and check its tag and sha256
         run: python3 tools/fetch_brand.py
       - name: Build locked documentation environment
@@ -50,8 +29,12 @@ jobs:
       - name: Build and verify candidate without network access
         run: |
           docker run --rm --network none --user "$(id -u):$(id -g)" \
-            -e GITHUB_ACTIONS=true -e GITHUB_RUN_ID \
+            -e GITHUB_ACTIONS=true -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
             -v "$PWD:/workspace" root-docs task verify
+      - name: Bind verified site bytes to this publisher revision and run
+        env:
+          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tools/check_artifact.py seal artifacts
       - name: Publish individual test outcomes in the job summary
         if: ${{ !cancelled() }}
         run: |
@@ -108,20 +91,18 @@ jobs:
         with:
           name: root-documentation-review
           path: verified
+      - name: Read the artifact validator and lock from the exact trusted publisher revision
+        if: steps.freshness.outputs.current == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: publisher-check
+          persist-credentials: false
       - name: Check identity and package only generated site
         if: steps.freshness.outputs.current == 'true'
         run: |
-          python - <<'PY'
-          import json, os
-          p = json.load(open('verified/site/build.json'))
-          assert p['source_commit'] == os.environ['GITHUB_SHA']
-          assert p['source_dirty'] is False
-          assert p['publisher']['commit'] == os.environ['GITHUB_SHA']
-          assert p['content']['pinned'] is True and p['content']['dirty'] is False
-          assert p['content']['tag'] == p['content']['locked_tag']
-          assert p['content']['commit'] == p['content']['locked_commit']
-          PY
-          tar --dereference --hard-dereference -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
+          python3 publisher-check/tools/check_artifact.py check verified
+          tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: steps.freshness.outputs.current == 'true'
         with:

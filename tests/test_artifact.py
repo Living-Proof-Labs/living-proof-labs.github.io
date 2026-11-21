@@ -1,0 +1,163 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Artifact identity and actual deployment-freshness script regression checks."""
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from check_artifact import artifact, check_identity
+from docs_source import projection_identity, acquire
+from test_docs_payload import fixture, pin
+from test_docs_source import api_fixture, evidence
+
+SHA = 'c' * 40
+RUN = '456'
+LEGACY = {'repository': 'Living-Proof-Labs/.github', 'tag': 'v1.1.3', 'commit': 'd' * 40}
+
+
+def identity(content):
+    return {'source_commit': SHA, 'source_dirty': False, 'workflow_run': RUN, 'workflow_attempt': '1',
+            'publisher': {'repository': 'Living-Proof-Labs/living-proof-labs.github.io',
+                          'commit': SHA, 'dirty': False}, 'content': content}
+
+
+def legacy_identity():
+    return identity(dict(LEGACY, locked_commit=LEGACY['commit'], locked_tag=LEGACY['tag'],
+                         pinned=True, dirty=False))
+
+
+class ArtifactIdentity(unittest.TestCase):
+    def test_legacy_roundtrip_and_tampering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'site').mkdir()
+            (root / 'site/index.html').write_text('reviewed site')
+            (root / 'site/build.json').write_text(json.dumps(legacy_identity()))
+            artifact('seal', root, LEGACY, SHA, RUN)
+            artifact('check', root, LEGACY, SHA, RUN)
+            (root / 'site/index.html').write_text('different site')
+            with self.assertRaisesRegex(ValueError, 'manifest/bytes mismatch'):
+                artifact('check', root, LEGACY, SHA, RUN)
+
+    def test_docs_identity_is_bound_to_lock_source_publisher_and_run(self):
+        _, blobs = fixture()
+        lock = pin(blobs)
+        get, _ = api_fixture(blobs, evidence())
+        with tempfile.TemporaryDirectory() as tmp:
+            acquire(lock, Path(tmp) / 'content', get)
+            content = projection_identity(lock, Path(tmp) / 'content')
+        value = identity(content)
+        check_identity(value, lock, SHA, RUN)
+        with self.assertRaisesRegex(ValueError, 'run/attempt'):
+            check_identity(value, lock, SHA, RUN, '2')
+        cases = [(dict(lock, manifest_sha256='0' * 64), SHA, RUN),
+                 (dict(lock, commit='b' * 40), SHA, RUN), (lock, 'e' * 40, RUN),
+                 (lock, SHA, '457'), (LEGACY, SHA, RUN)]
+        for reviewed, publisher, run in cases:
+            with self.subTest(lock=reviewed, publisher=publisher, run=run), self.assertRaises(ValueError):
+                check_identity(value, reviewed, publisher, run)
+        for field, replacement in [('source_checks', {}), ('manifest', {}), ('dirty', True),
+                                   ('repository', 'other/.github'), ('pinned', False)]:
+            mutated = copy.deepcopy(value)
+            mutated['content'][field] = replacement
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                check_identity(mutated, lock, SHA, RUN)
+
+    def test_docs_artifact_requires_the_matching_acquisition_receipt(self):
+        _, blobs = fixture()
+        lock = pin(blobs)
+        get, _ = api_fixture(blobs, evidence())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            acquire(lock, root / 'content', get)
+            content = projection_identity(lock, root / 'content')
+            (root / 'site').mkdir()
+            (root / 'site/index.html').write_text('docs site')
+            (root / 'site/build.json').write_text(json.dumps(identity(content)))
+            with self.assertRaisesRegex(ValueError, 'missing or linked content provenance'):
+                artifact('seal', root, lock, SHA, RUN)
+            receipt = root / 'content-provenance.json'
+            receipt.write_bytes((root / 'content/.docs-provenance.json').read_bytes())
+            artifact('seal', root, lock, SHA, RUN)
+            artifact('check', root, lock, SHA, RUN)
+            mutated = json.loads(receipt.read_text())
+            mutated['evidence']['jobs'][0]['conclusion'] = 'failure'
+            receipt.write_text(json.dumps(mutated))
+            with self.assertRaises(ValueError):
+                artifact('check', root, lock, SHA, RUN)
+
+    def test_missing_manifest_extra_files_and_links_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'site').mkdir()
+            (root / 'site/index.html').write_text('site')
+            (root / 'site/build.json').write_text(json.dumps(legacy_identity()))
+            with self.assertRaisesRegex(ValueError, 'missing artifact manifest'):
+                artifact('check', root, LEGACY, SHA, RUN)
+            artifact('seal', root, LEGACY, SHA, RUN)
+            added = root / 'site/extra.html'
+            added.write_text('unexpected')
+            with self.assertRaises(ValueError):
+                artifact('check', root, LEGACY, SHA, RUN)
+            added.unlink()
+            added.symlink_to(root / 'site/index.html')
+            with self.assertRaisesRegex(ValueError, 'symlink'):
+                artifact('check', root, LEGACY, SHA, RUN)
+            added.unlink()
+            os.link(root / 'site/index.html', added)
+            with self.assertRaisesRegex(ValueError, 'hard link'):
+                artifact('check', root, LEGACY, SHA, RUN)
+
+
+class DeployWorkflow(unittest.TestCase):
+    def setUp(self):
+        self.workflow = yaml.safe_load((ROOT / '.github/workflows/docs.yml').read_text())
+
+    def test_actual_freshness_script_rejects_stale_and_missing_remote(self):
+        steps = self.workflow['jobs']['deploy']['steps']
+        script = next(step['run'] for step in steps if step.get('id') == 'freshness')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git = root / 'git'
+            git.write_text('#!/bin/sh\nprintf "%s" "$TEST_REMOTE"\n')
+            git.chmod(0o755)
+            for remote, expected in [(SHA + '\trefs/heads/main\n', 'current=true'),
+                                     ('f' * 40 + '\trefs/heads/main\n', 'current=false'),
+                                     ('', None), ('not-a-sha\trefs/heads/main\n', None)]:
+                output = root / 'output'
+                output.write_text('')
+                env = dict(os.environ, PATH=str(root) + ':' + os.environ['PATH'], TEST_REMOTE=remote,
+                           GITHUB_REPOSITORY='Living-Proof-Labs/living-proof-labs.github.io',
+                           GITHUB_SHA=SHA, GITHUB_OUTPUT=str(output), GITHUB_STEP_SUMMARY=str(root / 'summary'))
+                result = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+                if expected is None:
+                    self.assertNotEqual(result.returncode, 0)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(expected, output.read_text())
+
+    def test_deploy_validator_comes_from_exact_publisher_not_content_or_artifact(self):
+        steps = self.workflow['jobs']['deploy']['steps']
+        checkout = next(step for step in steps if step.get('with', {}).get('path') == 'publisher-check')
+        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
+        self.assertFalse(checkout['with']['persist-credentials'])
+        checking = next(step for step in steps if 'check_artifact.py check' in step.get('run', ''))
+        self.assertIn('publisher-check/tools/check_artifact.py check verified', checking['run'])
+        self.assertNotIn('--dereference', checking['run'])
+        self.assertEqual(checking['if'], "steps.freshness.outputs.current == 'true'")
+        self.assertEqual(self.workflow['jobs']['deploy']['needs'], 'build')
+        seal = next(step for step in self.workflow['jobs']['build']['steps']
+                    if 'check_artifact.py seal' in step.get('run', ''))
+        self.assertEqual(seal['env']['PUBLISHER_SHA'], '${{ github.event.pull_request.head.sha || github.sha }}')
+
+
+if __name__ == '__main__':
+    unittest.main()

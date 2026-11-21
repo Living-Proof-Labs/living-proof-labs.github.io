@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fetch the pinned .github content release tag into .content (or CONTENT_DIR)."""
+"""Fetch the explicit release tag or verified docs-only projection into .content."""
 import json
 import os
 from pathlib import Path
@@ -21,6 +21,11 @@ def main():
     if errors:
         raise SystemExit('\n'.join(errors))
     target = Path(os.environ.get('CONTENT_DIR') or ROOT / '.content')
+    if lock.get('mode') == 'documentation-v1':
+        from docs_source import acquire
+        acquire(lock, target)
+        print(f'{lock["repository"]}@{lock["commit"]}: verified documentation projection in {target}')
+        return
     url = os.environ.get('CONTENT_URL') or f'https://github.com/{lock["repository"]}.git'
     target.mkdir(parents=True, exist_ok=True)
     if not (target / '.git').exists():

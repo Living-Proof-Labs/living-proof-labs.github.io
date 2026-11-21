@@ -65,10 +65,14 @@ def main(argv=None):
         assert len(publisher['commit']) == 40 and publisher['commit'] == identity['source_commit']
         assert len(content['commit']) == 40, 'content commit'
         assert content['repository'] == 'Living-Proof-Labs/.github', 'content repository'
-        assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
-                            content['locked_tag']), 'content locked_tag'
-        if content.get('pinned'):
-            assert content.get('tag') == content['locked_tag'], 'content tag'
+        if content.get('mode') == 'documentation-v1':
+            from check_artifact import check_docs_identity
+            check_docs_identity(content)
+        else:
+            assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+                                content['locked_tag']), 'content locked_tag'
+            if content.get('pinned'):
+                assert content.get('tag') == content['locked_tag'], 'content tag'
         for name in identity['pages']:
             text = (root / name).read_text()
             for role, commit in (('publisher', publisher['commit']), ('content', content['commit'])):
