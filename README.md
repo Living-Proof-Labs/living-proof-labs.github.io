@@ -91,6 +91,14 @@ transport, not a public download promise. The live manual remains published.
 Verify `build.json`, visible source identity, navigation, search and old links
 against the successful deployment before calling a change delivered.
 
+After `deploy` succeeds on `main` (and is not skipped as stale), the `release`
+job calls `Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9`
+with `contents: write` to tag and release the verified `main` publisher commit.
+Publisher `vX.Y.Z` tags identify the publisher revision and remain distinct from
+the pinned `.github` content tag in `content.lock.json`. Setting the repository
+variable `RELEASES_ENABLED=false` disables release publication without blocking
+Pages deployment.
+
 ## Compatibility and rollback
 
 Keep `/vision.html`, `/#published-manuals`, `/#livingproof`, prior section anchors

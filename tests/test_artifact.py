@@ -227,6 +227,24 @@ class DeployWorkflow(unittest.TestCase):
                     if 'check_artifact.py seal' in step.get('run', ''))
         self.assertEqual(seal['env']['PUBLISHER_SHA'], '${{ github.event.pull_request.head.sha || github.sha }}')
 
+    def test_release_runs_only_after_actual_deploy_and_never_on_skip_or_failure(self):
+        self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
+        deploy = self.workflow['jobs']['deploy']
+        self.assertEqual(
+            deploy['outputs']['deployed'],
+            "${{ steps.freshness.outputs.current == 'true' && steps.deployment.outcome == 'success' }}",
+        )
+        release = self.workflow['jobs']['release']
+        self.assertEqual(release['needs'], 'deploy')
+        self.assertEqual(release['permissions'], {'contents': 'write'})
+        self.assertIn("github.ref == 'refs/heads/main'", release['if'])
+        self.assertIn("needs.deploy.outputs.deployed == 'true'", release['if'])
+        self.assertIn("vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true'", release['if'])
+        self.assertEqual(
+            release['uses'],
+            'Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
