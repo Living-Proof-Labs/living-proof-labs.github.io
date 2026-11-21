@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import tarfile
 import sys
 import tempfile
 import unittest
@@ -78,6 +80,19 @@ class ArtifactIdentity(unittest.TestCase):
                               for f in restored.rglob('*') if f.is_file()})
             self.assertFalse((restored / 'unrelated.txt').exists())
             artifact('check', restored, LEGACY, SHA, RUN)
+            validator = Path(tmp) / 'publisher-check'
+            shutil.copytree(ROOT / 'tools', validator / 'tools')
+            (validator / 'content.lock.json').write_text(json.dumps(LEGACY))
+            package = workflow['jobs']['verify-transport']['steps'][-1]['run']
+            env = dict(os.environ, PUBLISHER_SHA=SHA, GITHUB_SHA=SHA,
+                       GITHUB_RUN_ID=RUN, GITHUB_RUN_ATTEMPT='1', RUNNER_TEMP=tmp)
+            subprocess.run(['bash', '-eu', '-c', package], cwd=tmp, env=env,
+                           capture_output=True, text=True, check=True)
+            with tarfile.open(Path(tmp) / 'artifact.tar') as bundle:
+                files = {m.name.removeprefix('./'): bundle.extractfile(m).read()
+                         for m in bundle.getmembers() if m.isfile()}
+            self.assertEqual(files, {str(f.relative_to(restored / 'site')): f.read_bytes()
+                                     for f in (restored / 'site').rglob('*') if f.is_file()})
             (restored / 'site/.nojekyll').unlink()
             with self.assertRaisesRegex(ValueError, 'manifest/bytes mismatch'):
                 artifact('check', restored, LEGACY, SHA, RUN)
@@ -184,13 +199,29 @@ class DeployWorkflow(unittest.TestCase):
 
     def test_deploy_validator_comes_from_exact_publisher_not_content_or_artifact(self):
         steps = self.workflow['jobs']['deploy']['steps']
-        checkout = next(step for step in steps if step.get('with', {}).get('path') == 'publisher-check')
-        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
-        self.assertFalse(checkout['with']['persist-credentials'])
-        checking = next(step for step in steps if 'check_artifact.py check' in step.get('run', ''))
-        self.assertIn('publisher-check/tools/check_artifact.py check verified', checking['run'])
-        self.assertNotIn('--dereference', checking['run'])
-        self.assertEqual(checking['if'], "steps.freshness.outputs.current == 'true'")
+        proof = self.workflow['jobs']['verify-transport']
+        self.assertEqual(proof['needs'], 'build')
+        self.assertIn("github.event_name == 'pull_request'", proof['if'])
+        self.assertNotIn('permissions', proof)
+        for name in ['Read the artifact validator and lock from the exact trusted publisher revision',
+                     'Check identity and package only generated site']:
+            deploy_step = next(step for step in steps if step.get('name') == name)
+            proof_step = next(step for step in proof['steps'] if step.get('name') == name)
+            self.assertEqual(deploy_step['run'], proof_step['run'])
+            self.assertEqual(deploy_step['env'], proof_step['env'])
+            self.assertEqual(deploy_step['if'], "steps.freshness.outputs.current == 'true'")
+            subprocess.run(['bash', '-n'], input=proof_step['run'], text=True, check=True)
+        checkout = proof['steps'][1]['run']
+        self.assertIn('credential.helper=', checkout)
+        self.assertIn('GIT_CONFIG_GLOBAL=/dev/null', checkout)
+        self.assertIn('"$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY"', checkout)
+        self.assertIn('"$PUBLISHER_SHA" == "$GITHUB_SHA"', checkout)
+        self.assertIn('https://github.com/Living-Proof-Labs/living-proof-labs.github.io.git', checkout)
+        self.assertIn('rev-parse FETCH_HEAD', checkout)
+        packaging = proof['steps'][2]['run']
+        self.assertIn('publisher-check/tools/check_artifact.py check verified', packaging)
+        self.assertIn('test -f verified/site/.nojekyll', packaging)
+        self.assertNotIn('--dereference', packaging)
         self.assertEqual(self.workflow['jobs']['deploy']['needs'], 'build')
         seal = next(step for step in self.workflow['jobs']['build']['steps']
                     if 'check_artifact.py seal' in step.get('run', ''))

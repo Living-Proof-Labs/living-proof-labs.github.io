@@ -60,6 +60,44 @@ jobs:
             artifacts/content-provenance.json
           retention-days: 14
           if-no-files-found: error
+  verify-transport:
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: root-documentation-review
+          path: verified
+      - name: Read the artifact validator and lock from the exact trusted publisher revision
+        env:
+          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == 'Living-Proof-Labs/living-proof-labs.github.io' ]]
+          [[ "$PUBLISHER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
+          else
+            [[ "$GITHUB_EVENT_NAME" == 'push' || "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]
+            [[ "$GITHUB_REF" == 'refs/heads/main' && "$PUBLISHER_SHA" == "$GITHUB_SHA" ]]
+          fi
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+          git -c core.hooksPath=/dev/null init publisher-check
+          git -C publisher-check -c credential.helper= -c core.hooksPath=/dev/null fetch --depth=1 \
+            https://github.com/Living-Proof-Labs/living-proof-labs.github.io.git "$PUBLISHER_SHA"
+          [[ "$(git -C publisher-check rev-parse FETCH_HEAD)" == "$PUBLISHER_SHA" ]]
+          git -C publisher-check -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+      - name: Check identity and package only generated site
+        env:
+          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 publisher-check/tools/check_artifact.py check verified
+          test -f verified/site/.nojekyll
+          tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
+          tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -95,16 +133,35 @@ jobs:
           path: verified
       - name: Read the artifact validator and lock from the exact trusted publisher revision
         if: steps.freshness.outputs.current == 'true'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.sha }}
-          path: publisher-check
-          persist-credentials: false
+        env:
+          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == 'Living-Proof-Labs/living-proof-labs.github.io' ]]
+          [[ "$PUBLISHER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
+          else
+            [[ "$GITHUB_EVENT_NAME" == 'push' || "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]
+            [[ "$GITHUB_REF" == 'refs/heads/main' && "$PUBLISHER_SHA" == "$GITHUB_SHA" ]]
+          fi
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+          git -c core.hooksPath=/dev/null init publisher-check
+          git -C publisher-check -c credential.helper= -c core.hooksPath=/dev/null fetch --depth=1 \
+            https://github.com/Living-Proof-Labs/living-proof-labs.github.io.git "$PUBLISHER_SHA"
+          [[ "$(git -C publisher-check rev-parse FETCH_HEAD)" == "$PUBLISHER_SHA" ]]
+          git -C publisher-check -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
       - name: Check identity and package only generated site
         if: steps.freshness.outputs.current == 'true'
+        env:
+          PUBLISHER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python3 publisher-check/tools/check_artifact.py check verified
+          test -f verified/site/.nojekyll
           tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
+          tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: steps.freshness.outputs.current == 'true'
         with:
