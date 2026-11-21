@@ -10,7 +10,7 @@ tasks:
     cmds:
       - python3 tools/fetch_content.py
   content:pin:
-    desc: Fail unless the pinned .github tag resolves to its commit and is reachable from .github main (needs network)
+    desc: Verify the released tag or exact-main documentation payload and source checks (needs network)
     cmds:
       - python3 tools/check_content_pin.py
   brand:

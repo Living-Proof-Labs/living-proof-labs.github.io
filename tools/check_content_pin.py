@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fail unless the content release pinned in content.lock.json is a valid tag on .github main.
+"""Verify the explicit released-tag or documentation-only content lock.
 
 Usage: check_content_pin.py [CONTENT_GIT_DIR]. The directory must be a clone of the
 content repository; `main` and the pinned tag are fetched from CONTENT_URL (default: GitHub)
 unless CONTENT_MAIN_REF names an existing ref to test against instead.
+Those overrides apply only to legacy tag mode. Documentation mode revalidates
+the staged manifest and canonical GitHub exact-main documentation-job evidence.
 """
 import json
 import os
@@ -52,6 +54,13 @@ def lock_errors(lock):
     """Return validation errors for content.lock.json, or an empty list."""
     if not isinstance(lock, dict):
         return ['FAIL: content.lock.json must be a JSON object']
+    if 'mode' in lock:
+        from docs_payload import validate_lock
+        try:
+            validate_lock(lock)
+        except ValueError as error:
+            return [f'FAIL: {error}']
+        return []
     errors = []
     repo_error = repository_error(lock)
     if repo_error:
@@ -84,6 +93,15 @@ def main(argv, root=ROOT):
             print(error)
         return 1
     repo = Path(argv[1] if len(argv) > 1 else os.environ.get('CONTENT_DIR') or root / '.content')
+    if lock.get('mode') == 'documentation-v1':
+        from docs_source import projection_identity, source_evidence
+        identity = projection_identity(lock, repo)
+        evidence = source_evidence(lock['commit'])
+        from docs_source import verify_evidence
+        if verify_evidence(lock['commit'], evidence) != identity['source_checks']:
+            raise SystemExit('FAIL: source verification changed; reacquire the documentation payload')
+        print(f'{lock["repository"]}@{lock["commit"]}: docs payload and source checks verified')
+        return 0
     main_ref = os.environ.get('CONTENT_MAIN_REF')
     if not main_ref:
         url = os.environ.get('CONTENT_URL') or f'https://github.com/{lock["repository"]}.git'
