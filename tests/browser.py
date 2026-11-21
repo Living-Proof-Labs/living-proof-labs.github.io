@@ -2,6 +2,7 @@
 """Exercise the delivered artifact with real Chromium and publish individual outcomes."""
 import functools
 import http.server
+import json
 import os
 from pathlib import Path
 import threading
@@ -438,7 +439,9 @@ class BrowserTests(unittest.TestCase):
         tasks = first_table_rows((CONTENT / 'docs' / 'index.md').read_text(encoding='utf-8'))
         self.assertGreater(tasks, 0)
         expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(tasks)
-        expect(self.page.locator('.docs-identity')).to_contain_text('Docs: development')
+        build = json.loads((ARTIFACTS / 'site/build.json').read_text())
+        label = build['publisher'].get('version', 'development')
+        expect(self.page.locator('.docs-identity')).to_contain_text(f'Docs: {label}')
         expect(self.page.locator('.docs-identity')).to_contain_text('publisher ')
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')

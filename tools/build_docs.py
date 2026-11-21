@@ -29,6 +29,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_content_pin import lock_errors, tag_commit  # noqa: E402
+from publisher_release_identity import validate_version  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / '.build'
@@ -212,16 +213,16 @@ def main():
     source.mkdir(parents=True)
     content_url = f'https://github.com/{content["repository"]}'
     blob = f'{content_url}/blob/{content["commit"]}/'
-    publisher_tag = os.environ.get('PUBLISHER_TAG', '').strip()
-    publisher_version = os.environ.get('PUBLISHER_VERSION', '').strip()
-    publisher_url = (f'https://github.com/{PUBLISHER}/releases/tag/{publisher_tag}'
-                     if publisher_tag else f'https://github.com/{PUBLISHER}/tree/{sha}')
+    publisher_version = os.environ.get('PUBLISHER_VERSION', '')
+    if publisher_version or os.environ.get('GITHUB_ACTIONS') == 'true':
+        validate_version(publisher_version)
+        if sha != os.environ.get('PUBLISHER_SHA') or dirty:
+            raise SystemExit('Shared build version requires the exact clean publisher commit')
+    publisher_url = f'https://github.com/{PUBLISHER}/tree/{sha}'
     content_label = f'{content["tag"]} ({content["commit"][:7]})' if content.get('tag') else content['commit'][:7]
     flags = (' · local changes' if dirty else '') + ('' if content['pinned'] else ' · content not at pinned revision')
-    if publisher_tag and not dirty:
-        identity = f'Docs: {publisher_tag} · content {content_label} · publisher {publisher_tag} ({sha[:7]}){flags}'
-    else:
-        identity = f'Docs: development · content {content_label} · publisher {sha[:7]}{flags}'
+    label = publisher_version or 'development'
+    identity = f'Docs: {label} · content {content_label} · publisher {sha[:7]}{flags}'
     pages = {p['source']: p['path'] for p in site['pages']}
     licenses = {p['path']: p['license'] for p in site['pages']}
     tables = directory_tables(json.loads((content_root / site['directory']).read_text()))
@@ -281,8 +282,6 @@ def main():
     generator_label = generator_name[:1].upper() + generator_name[1:]
     publisher_info = {'repository': PUBLISHER, 'commit': sha, 'dirty': dirty,
                       'source_files': publisher_files}
-    if publisher_tag and not dirty:
-        publisher_info['tag'] = publisher_tag
     if publisher_version and not dirty:
         publisher_info['version'] = publisher_version
     provenance = {'source_commit': sha, 'source_dirty': dirty,

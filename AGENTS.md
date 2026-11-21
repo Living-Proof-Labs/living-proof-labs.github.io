@@ -16,10 +16,9 @@ the organization pages authored in Living-Proof-Labs/.github (`docs/site.json`).
 Do not add or edit organization content here; change it in .github, then move
 `content.lock.json` to the merged commit. Task generates the contributor reference from actual commands. Docker supplies the
 locked build/browser environment; CI uses those tasks and publishes only the
-verified artifact. Do not add application packaging for this editorial site. Publisher releases on
-verified `main` use the shared semantic-release workflow after Pages deployment
-succeeds, keeping publisher tags distinct from the pinned upstream content
-version. Local search covers only the root pages, not remote manuals.
+verified artifact. Do not add application packaging for this editorial site. The shared resolver supplies the publisher build version. Verified `main` output
+deploys only after a matching, published semantic-release tag. Publisher tags
+remain distinct from the pinned upstream content version. Local search covers only the root pages, not remote manuals.
 
 Preserve /vision.html, root section fragments and license-file URLs. GitHub
 Actions is the only publication route; the legacy Jekyll fallback was removed

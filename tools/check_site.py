@@ -88,8 +88,14 @@ def main(argv=None):
                                 content['locked_tag']), 'content locked_tag'
             if content.get('pinned'):
                 assert content.get('tag') == content['locked_tag'], 'content tag'
-        for name in identity['pages']:
+        version = publisher.get('version')
+        if version is not None:
+            from publisher_release_identity import validate_version
+            validate_version(version)
+        for name in sorted(set(identity['pages']) | {'source.html'}):
             text = (root / name).read_text()
+            if version:
+                assert f'Docs: {version}' in text, f'{name} does not show the publisher version'
             for role, commit in (('publisher', publisher['commit']), ('content', content['commit'])):
                 assert commit[:7] in text, f'{name} does not show the {role} revision'
         source = (root / 'source.html').read_text()

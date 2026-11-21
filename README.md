@@ -91,13 +91,22 @@ transport, not a public download promise. The live manual remains published.
 Verify `build.json`, visible source identity, navigation, search and old links
 against the successful deployment before calling a change delivered.
 
-After `deploy` succeeds on `main` (and is not skipped as stale), the `release`
-job calls `Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.7.9`
-with `contents: write` to tag and release the verified `main` publisher commit.
-Publisher `vX.Y.Z` tags identify the publisher revision and remain distinct from
-the pinned `.github` content tag in `content.lock.json`. Setting the repository
-variable `RELEASES_ENABLED=false` disables release publication without blocking
-Pages deployment.
+The shared read-only resolver supplies one `semver-version` and exact source
+for pull requests, main and an explicit delivery retry. All three run the same
+build, checks and artifact seal. Pull requests and ordinary no-release main
+runs cannot publish. On a release-worthy main run, the shared release writer
+receives the version and commit from the verified artifact seal. It refuses to
+tag if the release plan changed while building. Pages then independently
+requires the published stable tag, exact current main and the sealed artifact
+from that attempt. A tag or version mismatch leaves the current live site
+unchanged. `RELEASES_ENABLED=false`
+prevents a new release and therefore ordinary main deployment.
+
+Publisher releases are distinct from the pinned `.github` content in
+`content.lock.json`. To retry delivery, use the already-published exact
+current-main release tag as the workflow's `release_tag`; no tag is created.
+Rerun all jobs if a partial rerun retained an earlier attempt's version plan
+or artifact. No old attempt's artifact is reused.
 
 ## Compatibility and rollback
 
