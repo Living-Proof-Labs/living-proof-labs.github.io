@@ -90,16 +90,22 @@ def source_evidence(commit, get=api):
     branch = get(PREFIX + '/branches/main')
     main_sha = branch.get('commit', {}).get('sha')
     require(hex_digest(main_sha, 40), 'invalid protected-main identity')
-    comparison = get(PREFIX + f'/compare/{commit}...{main_sha}')
+    # Equality proves ancestry without asking GitHub to compare a commit to itself.
+    # For an older pin the independent comparison remains mandatory.
+    comparison = ({'status': 'identical', 'base_commit': {'sha': commit},
+                   'merge_base_commit': {'sha': commit}} if main_sha == commit
+                  else get(PREFIX + f'/compare/{commit}...{main_sha}'))
     query = urlencode({'head_sha': commit, 'event': 'push', 'branch': 'main', 'per_page': 100})
     listing = get(PREFIX + '/actions/workflows/verify.yml/runs?' + query)
     runs = listing.get('workflow_runs', [])
     require(0 < listing.get('total_count', 0) == len(runs) <= 100, 'missing or truncated source runs')
     require(all(positive(run.get('id')) for run in runs), 'invalid source run IDs')
     # A failed/incomplete newer run cannot be hidden by an older success.
-    run_id = max(run['id'] for run in runs)
-    run = get(PREFIX + f'/actions/runs/{run_id}')
-    require(run.get('id') == run_id, 'source API returned another run')
+    require(len({run['id'] for run in runs}) == len(runs), 'duplicate source run IDs')
+    # The canonical workflow-runs listing already contains full run identity and
+    # current attempt. Validate that response; do not fetch the same run twice.
+    run = max(runs, key=lambda value: value['id'])
+    run_id = run['id']
     attempt = run.get('run_attempt')
     require(positive(attempt), 'missing source run attempt')
     listing = get(PREFIX + f'/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100')
