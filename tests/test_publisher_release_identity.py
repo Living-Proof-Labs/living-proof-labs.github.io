@@ -98,7 +98,10 @@ class CommonVersionedBuild(unittest.TestCase):
                            'license': 'CC-BY-4.0'}],
                 'directory': 'docs/directory.json',
             }))
-            build_lock = json.loads((ROOT / 'content.lock.json').read_text())
+            # This synthetic tagged case must not follow the live publisher pin mode.
+            build_lock = dict(LEGACY)
+            lock_path = work / 'content.lock.json'
+            lock_path.write_text(json.dumps(build_lock))
             pinned = dict(build_lock, locked_commit=build_lock['commit'], locked_tag=build_lock['tag'],
                           pinned=True, dirty=False)
             calls = []
@@ -125,6 +128,7 @@ class CommonVersionedBuild(unittest.TestCase):
                                                'GITHUB_RUN_ATTEMPT': '1', 'PUBLISHER_SHA': SHA,
                                                'PUBLISHER_VERSION': version}), \
                          patch.object(build_docs, 'STAGE', stage), patch.object(build_docs, 'SITE', site), \
+                         patch.object(build_docs, 'LOCK', lock_path), \
                          patch.object(build_docs, 'content_identity', return_value=(content, dict(pinned))), \
                          patch.object(build_docs, 'command', side_effect=command), \
                          patch.object(build_docs, 'brand_css', return_value=b'/* fixture */'), \
