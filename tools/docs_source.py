@@ -36,9 +36,7 @@ def api(path, limit=4 * 1024 * 1024):
     require(path.startswith(PREFIX + '/'), 'unexpected source API origin')
     headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'Living-Proof-Labs-docs-publisher',
                'X-GitHub-Api-Version': '2022-11-28'}
-    token = os.environ.get('GITHUB_TOKEN')
-    if token:
-        headers['Authorization'] = f'Bearer {token}'
+    # Public canonical source: never forward the publisher's repository token.
     with build_opener(NoRedirect).open(Request('https://api.github.com/' + path, headers=headers),
                                          timeout=30) as response:
         data = response.read(limit + 1)

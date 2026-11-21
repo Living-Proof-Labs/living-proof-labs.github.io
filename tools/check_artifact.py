@@ -81,6 +81,8 @@ def inventory(site):
         require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
                 'artifact contains a special file or hard link')
         relative = path.relative_to(site).as_posix()
+        require(not any(part.startswith('.') for part in Path(relative).parts)
+                or relative == '.nojekyll', 'unapproved hidden site file')
         files[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     require('build.json' in files and 'index.html' in files, 'incomplete artifact site')
     return files

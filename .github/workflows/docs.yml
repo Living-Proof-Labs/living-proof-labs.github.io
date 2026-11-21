@@ -17,8 +17,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Acquire and verify the reviewed content source
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 tools/fetch_content.py
           python3 tools/check_content_pin.py .content
@@ -55,7 +53,11 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: root-documentation-review
-          path: artifacts/
+          include-hidden-files: true
+          path: |
+            artifacts/site/
+            artifacts/site-manifest.json
+            artifacts/content-provenance.json
           retention-days: 14
           if-no-files-found: error
   deploy:

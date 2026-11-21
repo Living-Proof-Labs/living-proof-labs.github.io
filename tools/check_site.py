@@ -16,10 +16,24 @@ class Page(HTMLParser):
         super().__init__()
         self.ids = set()
         self.links = []
+        self.destination_errors = []
         self.feed(text)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == "base":
+            self.destination_errors.append("base changes effective destinations")
+        for key in ("href", "src", "poster", "action", "formaction"):
+            if key in attrs:
+                value = attrs[key]
+                try:
+                    url = urlsplit(value.strip())
+                    if (any(ord(c) < 32 or ord(c) == 127 for c in value)
+                            or url.scheme.lower() not in {"", "http", "https", "mailto", "tel"}
+                            or url.username or url.password):
+                        self.destination_errors.append(f"Unsupported rendered {key} destination")
+                except ValueError:
+                    self.destination_errors.append(f"Malformed rendered {key} destination")
         if "id" in attrs:
             self.ids.add(attrs["id"])
         if tag in {"a", "link"} and "href" in attrs:
@@ -39,7 +53,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     root = args.site.resolve()
     pages = {p: Page(p.read_text()) for p in root.rglob("*.html")}
-    failures = []
+    failures = [f"{path.relative_to(root)}: {error}"
+                for path, page in pages.items() for error in page.destination_errors]
     external = set()
     if root / "index.html" not in pages:
         failures.append("Missing built index.html; run task build first")

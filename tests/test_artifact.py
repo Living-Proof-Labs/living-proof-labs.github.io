@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 
 import yaml
 
@@ -46,6 +47,43 @@ class ArtifactIdentity(unittest.TestCase):
             (root / 'site/index.html').write_text('different site')
             with self.assertRaisesRegex(ValueError, 'manifest/bytes mismatch'):
                 artifact('check', root, LEGACY, SHA, RUN)
+
+    def test_scoped_transport_preserves_nojekyll_and_exact_seal(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/docs.yml').read_text())
+        upload = next(s for s in workflow['jobs']['build']['steps']
+                      if s.get('with', {}).get('name') == 'root-documentation-review')['with']
+        self.assertTrue(upload['include-hidden-files'])
+        self.assertEqual(upload['path'].splitlines(),
+                         ['artifacts/site/', 'artifacts/site-manifest.json',
+                          'artifacts/content-provenance.json'])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'artifacts'
+            (root / 'site').mkdir(parents=True)
+            (root / 'site/index.html').write_text('ordinary site')
+            (root / 'site/build.json').write_text(json.dumps(legacy_identity()))
+            (root / 'site/.nojekyll').write_bytes(b'')
+            (root / 'unrelated.txt').write_text('not transported')
+            artifact('seal', root, LEGACY, SHA, RUN)
+            selected = [f for f in (root / 'site').rglob('*') if f.is_file()]
+            selected.append(root / 'site-manifest.json')
+            archive = Path(tmp) / 'transport.zip'
+            with zipfile.ZipFile(archive, 'w') as bundle:
+                for f in selected:
+                    bundle.write(f, f.relative_to(root).as_posix())
+            restored = Path(tmp) / 'verified'
+            with zipfile.ZipFile(archive) as bundle:
+                bundle.extractall(restored)  # Only the ordinary files created above.
+            self.assertEqual({str(f.relative_to(root)): f.read_bytes() for f in selected},
+                             {str(f.relative_to(restored)): f.read_bytes()
+                              for f in restored.rglob('*') if f.is_file()})
+            self.assertFalse((restored / 'unrelated.txt').exists())
+            artifact('check', restored, LEGACY, SHA, RUN)
+            (restored / 'site/.nojekyll').unlink()
+            with self.assertRaisesRegex(ValueError, 'manifest/bytes mismatch'):
+                artifact('check', restored, LEGACY, SHA, RUN)
+            (root / 'site/.private').write_text('not approved')
+            with self.assertRaisesRegex(ValueError, 'hidden'):
+                artifact('seal', root, LEGACY, SHA, RUN)
 
     def test_docs_identity_is_bound_to_lock_source_publisher_and_run(self):
         _, blobs = fixture()

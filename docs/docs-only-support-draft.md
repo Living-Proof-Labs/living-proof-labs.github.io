@@ -38,7 +38,7 @@ for this mode. The release-tag mode retains its existing local development behav
 ## Source trust and payload boundary
 
 The fetcher contacts only `https://api.github.com/repos/Living-Proof-Labs/.github/`
-using TLS validation and optional existing `GITHUB_TOKEN` read access. Redirects,
+using TLS validation and anonymous public access. Publisher credentials are never sent. Redirects,
 wrong origin, unprotected main, non-ancestor commits, incomplete/truncated API
 results, missing checks and mismatched source/run/attempt identities fail closed.
 The source workflow must be `.github/workflows/verify.yml` on a `push` to `main`
@@ -77,7 +77,7 @@ Do not treat an externally supplied receipt as authenticated on its own.
 `task verify` retains the publisher's build, links, fixture and browser checks.
 `build.json` and the source page record content commit, payload digest and source
 workflow/run/attempt separately from publisher revision/run. The verified site is
-sealed with a complete file inventory and the reviewed lock. Deployment reads its
+sealed with a complete file inventory and the reviewed lock. Artifact upload is limited to the site, seal and optional source receipt, with hidden files enabled to retain `.nojekyll`; other hidden site files are refused. Deployment reads its
 validator and lock from the exact trusted publisher revision, never from content
 or artifact code; it verifies same-run identity and all site bytes before packaging.
 Links, hard links and special files are rejected. The existing main freshness check

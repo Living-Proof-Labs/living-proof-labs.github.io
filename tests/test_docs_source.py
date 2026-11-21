@@ -12,7 +12,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from docs_source import (PREFIX, REQUIRED_JOBS, WORKFLOW, acquire, fetch_blobs,
+from docs_source import (api, PREFIX, REQUIRED_JOBS, WORKFLOW, acquire, fetch_blobs,
                          candidate, projection_identity, source_evidence, verify_evidence)
 from test_docs_payload import COMMIT, fixture, pin
 
@@ -180,3 +180,18 @@ class TrustedSource(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AnonymousTransport(unittest.TestCase):
+    def test_publisher_token_is_never_forwarded(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"public": true}'
+        opener = mock.Mock()
+        opener.open.return_value = response
+        with mock.patch.dict(os.environ, {'GITHUB_TOKEN': 'ordinary-test-placeholder'}), \
+                mock.patch('docs_source.build_opener', return_value=opener):
+            self.assertEqual(api(PREFIX + '/actions/runs/123'), {'public': True})
+        request = opener.open.call_args.args[0]
+        self.assertIsNone(request.get_header('Authorization'))
+        self.assertEqual(request.full_url,
+                         'https://api.github.com/repos/Living-Proof-Labs/.github/actions/runs/123')
