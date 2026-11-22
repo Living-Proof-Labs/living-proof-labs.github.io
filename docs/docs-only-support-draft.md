@@ -38,9 +38,17 @@ for this mode. The release-tag mode retains its existing local development behav
 ## Source trust and payload boundary
 
 The fetcher contacts only `https://api.github.com/repos/Living-Proof-Labs/.github/`
-using TLS validation and anonymous public access. Publisher credentials are never sent. Redirects,
-wrong origin, unprotected main, non-ancestor commits, incomplete/truncated API
-results, missing checks and mismatched source/run/attempt identities fail closed.
+using TLS validation. When the workflow supplies its built-in `github.token` as
+`DOCS_SOURCE_TOKEN` (or `GITHUB_TOKEN` when that dedicated variable is unset),
+the read-only `contents: read` credential is attached to that API request and
+to no other repository, host, config-derived URL, or redirect. Redirects are
+refused. A personal token in `GH_TOKEN` is not read. An absent token stays
+anonymous so local review can still run; continuous integration sets the
+workflow token so the protected-source lookup is not left on the shared
+anonymous quota. This is the job's existing credential, not a new secret,
+personal access token, or app key. Wrong origin, unprotected main,
+non-ancestor commits, incomplete/truncated API results, missing checks and
+mismatched source/run/attempt identities fail closed.
 The source workflow must be `.github/workflows/verify.yml` on a `push` to `main`
 for the exact locked commit. The latest matching run and its current attempt must
 be complete, with these exact jobs successful:

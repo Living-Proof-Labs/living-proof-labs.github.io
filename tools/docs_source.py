@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from docs_payload import (MODE, REPOSITORY, MAX_FILES, MAX_FILE_BYTES, MAX_PAYLOAD_BYTES, MAX_TEXT_BYTES,
@@ -27,18 +27,83 @@ MANIFEST = '.docs-manifest.json'
 PREFIX = f'repos/{REPOSITORY}'
 
 
+# Literal API prefix. Do not derive it from CONTENT_URL or another config value.
+SOURCE_API = 'https://api.github.com/repos/Living-Proof-Labs/.github/'
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # urllib copies Authorization onto the next request, including a
+        # same-host redirect to another repository. Never build that request.
         raise ValueError('source API redirect refused')
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        raise ValueError('source API redirect refused')
+
+    http_error_300 = http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+
+def allows_source_credential(url):
+    """True only for the canonical Living-Proof-Labs/.github HTTPS API."""
+    if not isinstance(url, str) or any(ord(char) < 32 or char in '\\#' for char in url):
+        return False
+    parts = urlsplit(url)
+    if (parts.scheme != 'https' or parts.netloc != 'api.github.com' or parts.username
+            or parts.password or parts.fragment):
+        return False
+    if not parts.path.startswith('/repos/Living-Proof-Labs/.github/'):
+        return False
+    if any(char in parts.path for char in '%\\@'):
+        return False
+    segments = parts.path.split('/')
+    return segments[0] == '' and all(segment not in ('', '.', '..') for segment in segments[1:])
+
+
+def source_api_url(path):
+    """Build one source API URL. Config and relative URLs cannot retarget it."""
+    require(REPOSITORY == 'Living-Proof-Labs/.github', 'unexpected source API origin')
+    require(isinstance(path, str) and path.startswith(PREFIX + '/'), 'unexpected source API origin')
+    require('://' not in path and not path.startswith(('//', '/')), 'unexpected source API origin')
+    require(all(32 <= ord(char) < 127 and char not in '\\#@' for char in path),
+            'unexpected source API origin')
+    url = 'https://api.github.com/' + path
+    require(allows_source_credential(url), 'unexpected source API origin')
+    require(urlsplit(url).geturl() == url, 'unexpected source API origin')
+    return url
+
+
+def source_credential():
+    """Return the workflow github.token, never a personal token stored as GH_TOKEN."""
+    token = os.environ.get('DOCS_SOURCE_TOKEN') or os.environ.get('GITHUB_TOKEN') or ''
+    if token == '':
+        return None
+    require(token == token.strip() and all(32 < ord(char) < 127 for char in token),
+            'invalid source credential')
+    return token
 
 
 def api(path, limit=4 * 1024 * 1024):
-    require(path.startswith(PREFIX + '/'), 'unexpected source API origin')
+    url = source_api_url(path)
     headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'Living-Proof-Labs-docs-publisher',
                'X-GitHub-Api-Version': '2022-11-28'}
-    # Public canonical source: never forward the publisher's repository token.
-    with build_opener(NoRedirect).open(Request('https://api.github.com/' + path, headers=headers),
-                                         timeout=30) as response:
+    # Authenticated read of the public canonical source. The workflow's built-in
+    # github.token already has contents: read; this is not a new secret, personal
+    # access token, or app key. It is attached only to
+    # https://api.github.com/repos/Living-Proof-Labs/.github/ so the protected
+    # lookup is not left on the anonymous quota. CONTENT_URL and every other
+    # repository, host, or redirect stay unauthenticated, and redirects are refused
+    # because urllib would copy Authorization onto the next request.
+    token = source_credential()
+    if token is not None:
+        require(allows_source_credential(url), 'refusing to send source credential')
+        headers['Authorization'] = 'Bearer ' + token
+    request = Request(url, headers=headers)
+    require(request.full_url == url and request.type == 'https' and request.host == 'api.github.com',
+            'unexpected source API origin')
+    if request.get_header('Authorization'):
+        require(allows_source_credential(request.full_url), 'refusing to send source credential')
+    with build_opener(NoRedirect).open(request, timeout=30) as response:
+        require(response.geturl() == url, 'source API redirect refused')
         data = response.read(limit + 1)
     require(len(data) <= limit, 'source API response exceeds limit')
     return json.loads(data)

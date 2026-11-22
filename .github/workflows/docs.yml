@@ -43,6 +43,10 @@ jobs:
           PLAN_RUN_ATTEMPT: ${{ needs.version.outputs.run-attempt }}
         run: python3 tools/publisher_release_identity.py check-plan
       - name: Acquire and verify the reviewed content source
+        env:
+          # github.token with the workflow's existing contents: read. Named so
+          # git and gh do not present it to a config-derived CONTENT_URL.
+          DOCS_SOURCE_TOKEN: ${{ github.token }}
         run: |
           python3 tools/fetch_content.py
           python3 tools/check_content_pin.py .content
