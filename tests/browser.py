@@ -439,9 +439,10 @@ class BrowserTests(unittest.TestCase):
 
     def _assert_clean_identity_footer(self, build):
         content, publisher = build['content'], build['publisher']
+        label = publisher.get('version') or 'development'
         expected_content = content.get('tag') or 'commit'
         expected_publisher = publisher.get('tag') or 'commit'
-        expected = f'Docs: development · content {expected_content} · publisher {expected_publisher}'
+        expected = f'Docs: {label} · content {expected_content} · publisher {expected_publisher}'
         identity = self.page.locator('.docs-identity')
         expect(identity).to_contain_text(expected)
         visible = ' '.join(identity.inner_text().split())

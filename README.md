@@ -21,6 +21,10 @@ moves the pin. Renovate tracks this lock with the `github-tags` datasource,
 updating the release tag and its commit digest together. Keep the lock fields in
 `repository`, `tag`, `commit` order for the regex manager. The pin and build checks
 still reject mismatched or unmerged releases; dependency updates require review.
+A separately reviewed `documentation-v1` mode can instead project only docs data
+from an exact protected-main commit with successful source documentation checks.
+See [the docs-only source contract](docs/docs-only-support-draft.md). The committed
+production lock is unchanged; this is not an automatic mode switch or audit bypass.
 `build.json` and every page record both the content and the
 publisher revision. When that revision contains `docs/media/`, the build copies
 the whole directory into the site's `media/` path, including `NOTICE.txt`,
@@ -78,12 +82,31 @@ builds PR previews with `contents: read`; only the separate trusted-main deploy
 job has `pages: write` and `id-token: write`. It checks freshness inside the
 publication lock, verifies the publisher commit and that content is at the
 locked, clean `.github` commit, and deploys the successful run's site.
-The deploy job does not check out or execute project code.
+The deploy job checks out the exact trusted publisher revision only to run its
+artifact validator against its reviewed lock. It never executes upstream content
+or code from the downloaded artifact.
 
 Review artifacts expire after 14 days; the one-day Pages transfer artifact is
 transport, not a public download promise. The live manual remains published.
 Verify `build.json`, visible source identity, navigation, search and old links
 against the successful deployment before calling a change delivered.
+
+The shared read-only resolver supplies one `semver-version` and exact source
+for pull requests, main and an explicit delivery retry. All three run the same
+build, checks and artifact seal. Pull requests and ordinary no-release main
+runs cannot publish. On a release-worthy main run, the shared release writer
+receives the version and commit from the verified artifact seal. It refuses to
+tag if the release plan changed while building. Pages then independently
+requires the published stable tag, exact current main and the sealed artifact
+from that attempt. A tag or version mismatch leaves the current live site
+unchanged. `RELEASES_ENABLED=false`
+prevents a new release and therefore ordinary main deployment.
+
+Publisher releases are distinct from the pinned `.github` content in
+`content.lock.json`. To retry delivery, use the already-published exact
+current-main release tag as the workflow's `release_tag`; no tag is created.
+Rerun all jobs if a partial rerun retained an earlier attempt's version plan
+or artifact. No old attempt's artifact is reused.
 
 ## Compatibility and rollback
 

@@ -3,20 +3,22 @@
 
 Proposed by Vera in the capability-verifier#72 review (guidelines bump checklist items 2, 3 and 6),
 adapted for this repository. Offline: the shared release interface is recorded here and checked
-against the workflow call when this repo has one. When a guidelines release changes
-`semantic-release.yml` inputs or outputs, update SHARED_RELEASE_* in the same PR, after reading
-the diff. LIVINGPROOF_NETWORK=1 also compares them with the pinned tag.
+against the publisher's writer and resolver calls. When a guidelines release changes either
+interface, update SHARED_WORKFLOWS in the same pull request after reading the diff.
+LIVINGPROOF_NETWORK=1 also compares the recorded interfaces with the pinned tag.
 
-Run with: python3 -m unittest tests.test_guidelines_pins
+Run with: python3 -m unittest discover -s tests -p test_guidelines_pins.py
 """
 
 from __future__ import annotations
 
+from functools import lru_cache
 import json
 import os
 import re
+import subprocess
+import tempfile
 import unittest
-import urllib.request
 from pathlib import Path
 
 REPO = "Living-Proof-Labs/collaboration-guidelines"
@@ -27,8 +29,19 @@ USES = re.compile(
     re.MULTILINE,
 )
 PRESET = re.compile(rf"^github>{REPO}:renovate-preset#(?P<ref>.+)$")
-SHARED_RELEASE_INPUTS = {"dry-run", "draft-release"}
-SHARED_RELEASE_OUTPUTS = {"draft-created", "published", "version", "git-tag", "release-url"}
+SHARED_WORKFLOWS = {
+    "semantic-release.yml": {
+        "inputs": {"dry-run", "draft-release", "expected-version", "expected-commit"},
+        "outputs": {"draft-created", "published", "version", "git-tag", "release-url", "commit"},
+        "contents": "write",
+    },
+    "semantic-release-candidate.yml": {
+        "inputs": {"replay-tag"},
+        "outputs": {"semver-version", "pep440-version", "debian-version",
+                    "version", "git-tag", "commit", "run-id", "run-attempt"},
+        "contents": "read",
+    },
+}
 
 
 def _root() -> Path:
@@ -43,7 +56,7 @@ ROOT = _root()
 
 
 def workflow_path() -> Path | None:
-    for name in (".github/workflows/verify.yml", ".github/workflows/release.yml"):
+    for name in (".github/workflows/verify.yml", ".github/workflows/release.yml", ".github/workflows/docs.yml"):
         path = ROOT / name
         if path.is_file() and USES.search(path.read_text()):
             return path
@@ -106,6 +119,27 @@ def _workflow_call_keys(shared: str, section: str) -> set[str]:
     return set(re.findall(r"^      ([A-Za-z0-9_-]+):", found.group(1), re.MULTILINE))
 
 
+@lru_cache(maxsize=4)
+def released_checks(ref: str) -> dict[str, str]:
+    """Read the tested files from one exact tag snapshot without running it."""
+    if not re.fullmatch(TAG, ref):
+        raise ValueError("expected a full Guidelines release tag")
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    with tempfile.TemporaryDirectory() as checkout:
+        def git(*args: str) -> str:
+            return subprocess.check_output(["git", "-C", checkout, *args],
+                                           env=env, text=True, timeout=45)
+
+        git("init", "--quiet")
+        git("fetch", "--quiet", "--depth=1", f"https://github.com/{REPO}.git", f"refs/tags/{ref}")
+        return {
+            path: git("show", f"FETCH_HEAD:{path}")
+            for path in ("renovate-preset.json", *(
+                f".github/workflows/{file}" for file in SHARED_WORKFLOWS
+            ))
+        }
+
+
 class GuidelinesPins(unittest.TestCase):
     def test_every_guidelines_pin_is_a_full_release_tag(self) -> None:
         refs = pinned_versions()
@@ -121,22 +155,22 @@ class GuidelinesPins(unittest.TestCase):
     def test_mismatched_pins_are_reported(self) -> None:
         text = workflow_path().read_text()
         mutated = USES.sub(lambda m: m.group(0).replace(m.group("ref"), "v2.2.0", 1), text, count=1)
-        preset = {"extends": [f"github>{REPO}:renovate-preset#v9.2.0"]}
-        self.assertEqual(len(pinned_versions(mutated, preset)), 2)
+        self.assertEqual(pinned_versions(mutated), {*preset_refs(), "v2.2.0"})
 
-    @unittest.skipUnless(workflow_path() is not None, "this repository has no guidelines workflow call")
-    def test_release_call_uses_only_the_shared_interface(self) -> None:
+    def test_release_calls_use_only_their_shared_interfaces(self) -> None:
         path = workflow_path()
+        self.assertIsNotNone(path, "publisher must call the shared resolver and writer")
         text = path.read_text()
         calls = guideline_calls(text)
-        self.assertTrue(calls, "expected a job that uses the shared semantic-release workflow")
+        self.assertCountEqual([match.group("file") for match in calls.values()], SHARED_WORKFLOWS)
         for name, match in calls.items():
-            self.assertEqual(match.group("file"), "semantic-release.yml")
-            block = _job_block(text, name)
-            self.assertLessEqual(set(_mapping(block, "with")), SHARED_RELEASE_INPUTS)
-            self.assertEqual(_mapping(block, "permissions").get("contents"), "write")
-            used = set(re.findall(rf"needs\.{re.escape(name)}\.outputs\.([\w-]+)", text))
-            self.assertTrue(used <= SHARED_RELEASE_OUTPUTS, sorted(used - SHARED_RELEASE_OUTPUTS))
+            contract = SHARED_WORKFLOWS[match.group("file")]
+            with self.subTest(job=name):
+                block = _job_block(text, name)
+                self.assertLessEqual(set(_mapping(block, "with")), contract["inputs"])
+                self.assertEqual(_mapping(block, "permissions").get("contents"), contract["contents"])
+                used = set(re.findall(rf"needs\.{re.escape(name)}\.outputs\.([\w-]+)", text))
+                self.assertLessEqual(used, contract["outputs"])
 
     @unittest.skipUnless(workflow_path() is not None, "this repository has no guidelines workflow call")
     def test_an_unknown_release_output_is_reported(self) -> None:
@@ -150,18 +184,18 @@ class GuidelinesPins(unittest.TestCase):
         )
         found = set(re.findall(r"needs\.release\.outputs\.([\w-]+)", mutated))
         self.assertIn("tag", found)
-        self.assertTrue(found - SHARED_RELEASE_OUTPUTS >= {"tag"})
+        self.assertIn("tag", found - SHARED_WORKFLOWS["semantic-release.yml"]["outputs"])
 
     @unittest.skipUnless(os.environ.get("LIVINGPROOF_NETWORK"), "set LIVINGPROOF_NETWORK=1")
-    @unittest.skipUnless(workflow_path() is not None, "this repository has no guidelines workflow call")
-    def test_recorded_interface_matches_the_pinned_shared_workflow(self) -> None:
-        refs = {match.group("ref") for match in guideline_calls().values()}
-        (ref,) = refs
-        url = f"https://raw.githubusercontent.com/{REPO}/{ref}/.github/workflows/semantic-release.yml"
-        with urllib.request.urlopen(url, timeout=30) as response:
-            shared = response.read().decode()
-        self.assertEqual(_workflow_call_keys(shared, "inputs"), SHARED_RELEASE_INPUTS)
-        self.assertEqual(_workflow_call_keys(shared, "outputs"), SHARED_RELEASE_OUTPUTS)
+    def test_recorded_interfaces_match_both_pinned_shared_workflows(self) -> None:
+        calls = guideline_calls()
+        self.assertCountEqual([match.group("file") for match in calls.values()], SHARED_WORKFLOWS)
+        for match in calls.values():
+            file, ref = match.group("file", "ref")
+            with self.subTest(workflow=file, tag=ref):
+                shared = released_checks(ref)[f".github/workflows/{file}"]
+                for section in ("inputs", "outputs"):
+                    self.assertEqual(_workflow_call_keys(shared, section), SHARED_WORKFLOWS[file][section])
 
     def test_this_repository_does_not_opt_in_to_docs_brand_updates(self) -> None:
         # Proposed by Vera in the living-proof-labs.github.io#51 review.
@@ -184,9 +218,7 @@ class GuidelinesPins(unittest.TestCase):
         refs = pinned_versions()
         self.assertTrue(refs, "expected a Renovate preset pin")
         (ref,) = refs
-        url = f"https://raw.githubusercontent.com/{REPO}/{ref}/renovate-preset.json"
-        with urllib.request.urlopen(url, timeout=30) as response:
-            preset = json.loads(response.read().decode())
+        preset = json.loads(released_checks(ref)["renovate-preset.json"])
         brand_rules = [
             rule
             for rule in preset.get("packageRules", [])

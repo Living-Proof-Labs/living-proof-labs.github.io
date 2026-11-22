@@ -24,6 +24,7 @@ class Page(HTMLParser):
         self.identity_attrs = []
         self._identity_depth = 0
         self._identity_text = []
+        self.destination_errors = []
         self.feed(text)
 
     @property
@@ -41,6 +42,19 @@ class Page(HTMLParser):
         elif tag == "div" and "docs-identity" in (attrs.get("class") or "").split():
             self.identity_found = True
             self._identity_depth = 1
+        if tag == "base":
+            self.destination_errors.append("base changes effective destinations")
+        for key in ("href", "src", "poster", "action", "formaction"):
+            if key in attrs:
+                value = attrs[key]
+                try:
+                    url = urlsplit(value.strip())
+                    if (any(ord(c) < 32 or ord(c) == 127 for c in value)
+                            or url.scheme.lower() not in {"", "http", "https", "mailto", "tel"}
+                            or url.username or url.password):
+                        self.destination_errors.append(f"Unsupported rendered {key} destination")
+                except ValueError:
+                    self.destination_errors.append(f"Malformed rendered {key} destination")
         if "id" in attrs:
             self.ids.add(attrs["id"])
         if tag in {"a", "link"} and "href" in attrs:
@@ -68,7 +82,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     root = args.site.resolve()
     pages = {p: Page(p.read_text()) for p in root.rglob("*.html")}
-    failures = []
+    failures = [f"{path.relative_to(root)}: {error}"
+                for path, page in pages.items() for error in page.destination_errors]
     external = set()
     if root / "index.html" not in pages:
         failures.append("Missing built index.html; run task build first")
@@ -94,17 +109,28 @@ def main(argv=None):
         assert len(publisher['commit']) == 40 and publisher['commit'] == identity['source_commit']
         assert len(content['commit']) == 40, 'content commit'
         assert content['repository'] == 'Living-Proof-Labs/.github', 'content repository'
-        assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
-                            content['locked_tag']), 'content locked_tag'
-        if content.get('pinned'):
-            assert content.get('tag') == content['locked_tag'], 'content tag'
+        if content.get('mode') == 'documentation-v1':
+            from check_artifact import check_docs_identity
+            check_docs_identity(content)
+        else:
+            assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
+                                content['locked_tag']), 'content locked_tag'
+            if content.get('pinned'):
+                assert content.get('tag') == content['locked_tag'], 'content tag'
         publisher_tag = publisher.get('tag')
         if publisher_tag is not None:
             assert re.fullmatch(r'v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)',
                                 publisher_tag), 'publisher tag'
+        version = publisher.get('version')
+        if version is not None:
+            from publisher_release_identity import validate_version
+            validate_version(version)
+        label = version or 'development'
         expected_content = content['tag'] if content.get('tag') else 'commit'
         expected_publisher = publisher_tag if publisher_tag else 'commit'
-        expected_identity = f'Docs: development · content {expected_content} · publisher {expected_publisher}'
+        expected_identity = (
+            f'Docs: {label} · content {expected_content} · publisher {expected_publisher}'
+        )
         for name in sorted(set(identity['pages']) | {'source.html'}):
             page = pages.get(root / name)
             assert page is not None and page.identity_found, f'{name} is missing docs-identity'

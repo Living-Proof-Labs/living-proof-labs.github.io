@@ -29,6 +29,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_content_pin import TAG_PATTERN, lock_errors, tag_commit  # noqa: E402
+from publisher_release_identity import validate_version  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = ROOT / '.build'
@@ -128,6 +129,9 @@ def content_identity(lock):
     if errors:
         raise SystemExit('\n'.join(errors))
     path = content_dir()
+    if lock.get('mode') == 'documentation-v1':
+        from docs_source import projection_identity
+        return path, projection_identity(lock, path)
     if not (path / 'docs/site.json').is_file():
         raise SystemExit(f'No organization content at {path}; run `task content` to fetch '
                          f'{lock["repository"]}@{lock["tag"]} ({lock["commit"][:12]}) or set CONTENT_DIR')
@@ -223,17 +227,27 @@ def main():
     blob = f'{content_url}/blob/{content["commit"]}/'
     publisher_repo_url = f'https://github.com/{PUBLISHER}'
     publisher_url = f'{publisher_repo_url}/tree/{sha}'
+    publisher_version = os.environ.get('PUBLISHER_VERSION', '')
+    if publisher_version or os.environ.get('GITHUB_ACTIONS') == 'true':
+        validate_version(publisher_version)
+        if sha != os.environ.get('PUBLISHER_SHA') or dirty:
+            raise SystemExit('Shared build version requires the exact clean publisher commit')
     content_label = content['tag'] if content.get('tag') else 'commit'
     publisher_label = publisher_tag if publisher_tag else 'commit'
     flags = (' · local changes' if dirty else '') + ('' if content['pinned'] else ' · content not at pinned revision')
-    identity = f'Docs: development · content {content_label} · publisher {publisher_label}{flags}'
+    label = publisher_version or 'development'
+    identity = f'Docs: {label} · content {content_label} · publisher {publisher_label}{flags}'
     pages = {p['source']: p['path'] for p in site['pages']}
     licenses = {p['path']: p['license'] for p in site['pages']}
     tables = directory_tables(json.loads((content_root / site['directory']).read_text()))
     content['source_files'] = {}
+    if content.get('mode') == 'documentation-v1':
+        content['source_files']['docs/site.json'] = hashlib.sha256(
+            (content_root / 'docs/site.json').read_bytes()).hexdigest()
     for page in site['pages']:
         text = (content_root / page['source']).read_text()
-        content['source_files'][page['source']] = hashlib.sha256(text.encode()).hexdigest()
+        raw = (content_root / page['source']).read_bytes() if content.get('mode') else text.encode()
+        content['source_files'][page['source']] = hashlib.sha256(raw).hexdigest()
         for kind, rendered in tables.items():
             text = re.sub(rf'<!-- directory:{kind} -->.*?<!-- /directory:{kind} -->',
                           lambda _m, r=rendered: r, text, flags=re.S)
@@ -242,7 +256,8 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
     directory_text = (content_root / site['directory']).read_text()
-    content['source_files'][site['directory']] = hashlib.sha256(directory_text.encode()).hexdigest()
+    raw = (content_root / site['directory']).read_bytes() if content.get('mode') else directory_text.encode()
+    content['source_files'][site['directory']] = hashlib.sha256(raw).hexdigest()
     content['media_files'] = media_digests(content_root)
     publisher_files = {}
     for src, dest in LICENSE_PAGE.items():
@@ -279,12 +294,16 @@ def main():
     redirects = site.get('redirects', {})
     generator_name, generator_version = installed_zensical()
     generator_label = generator_name[:1].upper() + generator_name[1:]
+    publisher_info = {'repository': PUBLISHER, 'tag': publisher_tag, 'commit': sha, 'dirty': dirty,
+                      'source_files': publisher_files}
+    if publisher_version and not dirty:
+        publisher_info['version'] = publisher_version
     provenance = {'source_commit': sha, 'source_dirty': dirty,
                   'generator': f'{generator_name}=={generator_version}',
-                  'publisher': {'repository': PUBLISHER, 'tag': publisher_tag, 'commit': sha, 'dirty': dirty,
-                                'source_files': publisher_files},
+                  'publisher': publisher_info,
                   'content': content, 'pages': sorted(p.replace('.md', '.html') for p in licenses),
-                  'redirects': redirects, 'workflow_run': run}
+                  'redirects': redirects, 'workflow_run': run,
+                  'workflow_attempt': os.environ.get('GITHUB_RUN_ATTEMPT')}
     (source / 'build.json').write_text(json.dumps(provenance, indent=2) + '\n')
     content_rev = (
         f'[`{content["tag"]}`]({content_url}/releases/tag/{content["tag"]}) '
@@ -298,6 +317,11 @@ def main():
         if publisher_tag else
         f'[`{sha}`]({publisher_url})'
     )
+    source_checks = content.get('source_checks')
+    docs_evidence = (f'Documentation payload SHA-256: `{content["manifest_sha256"]}`. '
+                     f'[Source documentation checks]({source_checks["url"]}), '
+                     f'attempt {source_checks["run_attempt"]}.\n'
+                     if source_checks else '')
     (source / 'source.md').write_text(f'''# Version and source
 
 **{identity}**
@@ -307,8 +331,9 @@ def main():
 | Content (authored) | [{content["repository"]}]({content_url}) | {content_rev} |
 | Publisher (build, theme, search) | [{PUBLISHER}]({publisher_repo_url}) | {publisher_rev} |
 
-Content pinned by `content.lock.json`: **{content["pinned"]}** (`{content["locked_tag"]}` at `{content["locked_commit"][:12]}`). Local content changes:
+Content pinned by `content.lock.json`: **{content["pinned"]}** (`{content.get("mode") or content["locked_tag"]}` at `{content["locked_commit"][:12]}`). Local content changes:
 **{content["dirty"]}**. Local publisher changes: **{dirty}**.
+{docs_evidence}
 [Machine-readable build identity](build.json) lists every source file and its sha256.
 When the pinned revision contains `docs/media/`, that record includes each media
 file hash and the build publishes those bytes under `media/`.
@@ -342,7 +367,7 @@ evidence remain independent.
             if publisher_tag else publisher_url
         )
         identity_links = (
-            f'Docs: development · '
+            f'Docs: {label} · '
             f'content [{content_label}]({content_href} "content {content["commit"]}") · '
             f'publisher [{publisher_label}]({publisher_href} "publisher {sha}")'
             f'{flags}'
@@ -384,6 +409,9 @@ evidence remain independent.
     shutil.copytree(STAGE / 'site', SITE)
     copy_content_media(content_root, SITE / 'media')
     (SITE / '.nojekyll').touch()
+    if content.get('mode') == 'documentation-v1':
+        (SITE.parent / 'content-provenance.json').write_bytes(
+            (content_root / '.docs-provenance.json').read_bytes())
 
 
 if __name__ == '__main__':
