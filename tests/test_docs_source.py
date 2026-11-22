@@ -2,7 +2,9 @@
 """Exact-source acquisition and offline projection, using deterministic API fixtures."""
 import base64
 import copy
+from email.message import EmailMessage
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -10,8 +12,11 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+from urllib.request import HTTPSHandler, build_opener
+from urllib.response import addinfourl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
+import docs_source
 from docs_source import (api, PREFIX, REQUIRED_JOBS, WORKFLOW, acquire, fetch_blobs,
                          candidate, projection_identity, source_evidence, verify_evidence)
 from test_docs_payload import COMMIT, fixture, pin
@@ -238,21 +243,191 @@ class TrustedSource(unittest.TestCase):
                     acquire(pin(blobs), target, get)
             self.assertFalse(target.exists())
 
+    def test_docs_payload_advances_when_unrelated_settings_audit_failed(self):
+        _, blobs = fixture()
+        proof = evidence()
+        self.assertEqual(proof['run']['conclusion'], 'failure')
+        audit = next(job for job in proof['jobs'] if job['name'] == 'Strict repository settings audit')
+        self.assertEqual(audit['conclusion'], 'failure')
+        upstream = dict(blobs, **{
+            '.github/workflows/verify.yml': ('100644', b'name: Verify\n'),
+            '.github/workflows/apply-repository-settings.yml': ('100644', b'name: Apply settings\n'),
+            'config/github/repository-policy.json': ('100644', b'{"rules": true}\n'),
+        })
+        get, _ = api_fixture(upstream, proof)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'content'
+            acquire(pin(blobs), target, get)
+            self.assertTrue((target / 'docs/index.md').is_file())
+            self.assertFalse((target / '.github').exists())
+            self.assertFalse((target / 'config').exists())
+            self.assertEqual(projection_identity(pin(blobs), target)['source_checks']['jobs'][0]['name'],
+                             REQUIRED_JOBS[0])
+
+    def test_settings_and_mixed_releases_cannot_skip_the_docs_gate(self):
+        _, blobs = fixture()
+        proof = evidence()
+        proof['jobs'][0]['conclusion'] = 'failure'
+        proof['jobs'][-1]['conclusion'] = 'success'
+        get, _ = api_fixture(blobs, proof)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'content'
+            with self.assertRaises(ValueError):
+                acquire(pin(blobs), target, get)
+            self.assertFalse(target.exists())
+        for path in ('.github/workflows/apply-repository-settings.yml',
+                     'config/github/repository-policy.json'):
+            blocked = evidence()
+            blocked['run']['path'] = path
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                verify_evidence(COMMIT, blocked)
+        dispatched = evidence()
+        dispatched['run']['event'] = 'workflow_dispatch'
+        with self.assertRaises(ValueError):
+            verify_evidence(COMMIT, dispatched)
+
+
+TOKEN = 'ordinary-test-placeholder'
+PAT = 'pat-must-not-leak'
+SOURCE_API = 'https://api.github.com/repos/Living-Proof-Labs/.github/'
+
+
+def credential_environment(**values):
+    """Isolate the test from ambient publisher, app, and personal tokens."""
+    blocked = ('GITHUB_TOKEN', 'GH_TOKEN', 'DOCS_SOURCE_TOKEN', 'CONTENT_URL', 'CONTENT_MAIN_REF')
+    environment = {key: value for key, value in os.environ.items() if key not in blocked}
+    environment.update(values)
+    return environment
+
+
+def capture_request(path, **environment):
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = b'{"public": true}'
+    response.__enter__.return_value.geturl.return_value = 'https://api.github.com/' + path.split('#', 1)[0]
+    opener = mock.Mock()
+    opener.open.return_value = response
+    error = None
+    with mock.patch.dict(os.environ, credential_environment(**environment), clear=True), \
+            mock.patch('docs_source.build_opener', return_value=opener):
+        try:
+            api(path)
+        except ValueError as caught:
+            error = caught
+    request = opener.open.call_args.args[0] if opener.open.called else None
+    return error, request
+
+
+class SourceCredential(unittest.TestCase):
+    """The workflow github.token authenticates one repository API and no other destination."""
+
+    def test_token_is_attached_for_source_repository_api(self):
+        cases = [
+            PREFIX + '/branches/main',
+            PREFIX + '/actions/runs/123',
+            PREFIX + '/actions/workflows/verify.yml/runs?head_sha=' + COMMIT
+            + '&event=push&branch=main&per_page=100',
+            PREFIX + f'/compare/{COMMIT}...{COMMIT}',
+            PREFIX + f'/git/trees/{COMMIT}?recursive=1',
+            PREFIX + '/git/blobs/' + COMMIT,
+        ]
+        for path in cases:
+            for name, environment in (
+                    ('workflow', {'DOCS_SOURCE_TOKEN': TOKEN, 'GITHUB_TOKEN': 'other-workflow-token',
+                                  'GH_TOKEN': PAT}),
+                    ('actions', {'GITHUB_TOKEN': TOKEN, 'GH_TOKEN': PAT})):
+                with self.subTest(path=path, credential=name):
+                    error, request = capture_request(
+                        path, CONTENT_URL='https://evil.example/other.git', **environment)
+                    self.assertIsNone(error)
+                    self.assertEqual(request.get_header('Authorization'), 'Bearer ' + TOKEN)
+                    self.assertTrue(request.full_url.startswith(SOURCE_API))
+                    self.assertNotIn(TOKEN, request.full_url)
+                    self.assertNotIn(PAT, request.full_url)
+                    self.assertNotIn('evil.example', request.full_url)
+                    self.assertNotIn('other-workflow-token', request.header_items().__repr__())
+
+    def test_personal_token_and_absent_token_are_not_attached(self):
+        error, request = capture_request(PREFIX + '/branches/main', GH_TOKEN=PAT)
+        self.assertIsNone(error)
+        self.assertIsNone(request.get_header('Authorization'))
+        self.assertNotIn(PAT, request.full_url)
+        error, request = capture_request(PREFIX + '/branches/main')
+        self.assertIsNone(error)
+        self.assertIsNone(request.get_header('Authorization'))
+
+    def test_token_is_not_attached_for_other_repos_hosts_or_config_urls(self):
+        paths = [
+            'repos/Living-Proof-Labs/living-proof-labs.github.io/contents/README.md',
+            'repos/OtherOrg/.github/branches/main',
+            'repos/Living-Proof-Labs/.github.evil/branches/main',
+            PREFIX + '/../../repos/Other/secret',
+            PREFIX + '/../../../repos/Other/secret',
+            PREFIX + '/%2e%2e/%2e%2e/repos/Other/secret',
+            PREFIX + '/%2E%2E/branches/main',
+            PREFIX + '/branches/main\r\nHost: evil.example',
+            PREFIX + '/@evil.example/branches/main',
+            PREFIX + '/branches/main\\@evil.example',
+            'https://evil.example/repos/Living-Proof-Labs/.github/branches/main',
+            'https://api.github.com/repos/Other/secret',
+            '//evil.example/repos/Living-Proof-Labs/.github/branches/main',
+            '//api.github.com/repos/Living-Proof-Labs/.github/branches/main',
+            PREFIX + '/branches/main#https://evil.example/steal',
+            'repos/Living-Proof-Labs/.github',
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                error, request = capture_request(
+                    path, DOCS_SOURCE_TOKEN=TOKEN,
+                    CONTENT_URL='https://github.com/Other/secret.git')
+                self.assertIsNotNone(error)
+                self.assertIsNone(request)
+
+    def test_redirect_target_does_not_receive_the_token(self):
+        seen = []
+
+        class Record(HTTPSHandler):
+            def https_open(self, req):
+                seen.append((req.full_url, req.get_header('Authorization')))
+                headers = EmailMessage()
+                headers['Location'] = 'https://api.github.com/repos/Other/secret'
+                response = addinfourl(io.BytesIO(b''), headers, req.full_url, 302)
+                response.msg = 'Found'
+                return response
+
+        def opener(*handlers):
+            return build_opener(*handlers, Record)
+
+        environment = credential_environment(DOCS_SOURCE_TOKEN=TOKEN, GH_TOKEN=PAT)
+        for key in ('http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'all_proxy'):
+            environment.pop(key, None)
+        with mock.patch.dict(os.environ, environment, clear=True), \
+                mock.patch('docs_source.build_opener', side_effect=opener), \
+                self.assertRaisesRegex(ValueError, 'redirect refused'):
+            api(PREFIX + '/branches/main')
+        self.assertEqual(seen, [(SOURCE_API + 'branches/main', 'Bearer ' + TOKEN)])
+        self.assertFalse(any(url.startswith('https://api.github.com/repos/Other/') for url, _ in seen))
+        self.assertFalse(any(header and 'Other/secret' in url for url, header in seen))
+
+    def test_workflow_supplies_github_token_only_on_source_acquisition(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/docs.yml').read_text()
+        section = workflow.split('Acquire and verify the reviewed content source', 1)[1]
+        section = section.split('\n      - name:', 1)[0]
+        self.assertIn('DOCS_SOURCE_TOKEN: ${{ github.token }}', section)
+        self.assertNotIn('GH_TOKEN', section)
+        self.assertNotIn('GITHUB_TOKEN', section)
+        self.assertNotIn('permissions:', section)
+
+    def test_contract_explains_why_the_authenticated_read_is_safe(self):
+        source = Path(docs_source.__file__).read_text()
+        draft = (Path(__file__).resolve().parents[1] / 'docs/docs-only-support-draft.md').read_text()
+        for text in (source, draft):
+            self.assertIn(SOURCE_API, text)
+            self.assertIn('contents: read', text)
+            self.assertNotIn('never forward the publisher', text)
+            self.assertNotIn('Publisher credentials are never sent.', text)
+        self.assertIn('DOCS_SOURCE_TOKEN', draft)
+        self.assertIn('redirect', draft.lower())
+
 
 if __name__ == '__main__':
     unittest.main()
-
-
-class AnonymousTransport(unittest.TestCase):
-    def test_publisher_token_is_never_forwarded(self):
-        response = mock.MagicMock()
-        response.__enter__.return_value.read.return_value = b'{"public": true}'
-        opener = mock.Mock()
-        opener.open.return_value = response
-        with mock.patch.dict(os.environ, {'GITHUB_TOKEN': 'ordinary-test-placeholder'}), \
-                mock.patch('docs_source.build_opener', return_value=opener):
-            self.assertEqual(api(PREFIX + '/actions/runs/123'), {'public': True})
-        request = opener.open.call_args.args[0]
-        self.assertIsNone(request.get_header('Authorization'))
-        self.assertEqual(request.full_url,
-                         'https://api.github.com/repos/Living-Proof-Labs/.github/actions/runs/123')
