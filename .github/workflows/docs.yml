@@ -223,13 +223,98 @@ jobs:
           test -f verified/site/.nojekyll
           tar -C verified/site -cf "$RUNNER_TEMP/artifact.tar" .
           tar -tf "$RUNNER_TEMP/artifact.tar" | grep -Fx './.nojekyll'
+      - name: Record the verified Pages tar digest
+        id: pages-package
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest=$(sha256sum "$RUNNER_TEMP/artifact.tar")
+          echo "tar-sha256=${digest%% *}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: steps.freshness.outputs.current == 'true'
+        id: pages-artifact
         with:
           name: github-pages-${{ github.run_attempt }}
           path: ${{ runner.temp }}/artifact.tar
           retention-days: 1
           if-no-files-found: error
+      # Use the same-run Actions artifact client (like deploy-pages), not the REST index.
+      # An exact ID and name must both resolve to the sealed Pages tar before deploying.
+      - name: Require a valid Pages artifact ID
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        env:
+          UPLOADED_ID: ${{ steps.pages-artifact.outputs.artifact-id }}
+        run: |
+          [[ "$UPLOADED_ID" =~ ^[1-9][0-9]*$ ]]
+      - name: Read exact Pages artifact by ID
+        id: pages-id-first
+        if: steps.freshness.outputs.current == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.pages-artifact.outputs.artifact-id }}
+          path: ${{ runner.temp }}/publisher-pages-id-first
+      - name: Allow the ID lookup to settle
+        if: steps.freshness.outputs.current == 'true' && steps.pages-id-first.outcome == 'failure'
+        run: sleep 4
+      - name: Retry read by ID once
+        id: pages-id-retry
+        if: steps.freshness.outputs.current == 'true' && steps.pages-id-first.outcome == 'failure'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.pages-artifact.outputs.artifact-id }}
+          path: ${{ runner.temp }}/publisher-pages-id-retry
+      - name: Read exact Pages artifact by name
+        id: pages-name-first
+        if: steps.freshness.outputs.current == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: github-pages-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publisher-pages-name-first
+      - name: Allow the name lookup to settle
+        if: steps.freshness.outputs.current == 'true' && steps.pages-name-first.outcome == 'failure'
+        run: sleep 4
+      - name: Retry read by name once
+        id: pages-name-retry
+        if: steps.freshness.outputs.current == 'true' && steps.pages-name-first.outcome == 'failure'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: github-pages-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publisher-pages-name-retry
+      - name: Require matching ID and name readback of the exact tar
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        env:
+          EXPECTED_TAR: ${{ steps.pages-package.outputs.tar-sha256 }}
+          EXPECTED_NAME: github-pages-${{ github.run_attempt }}
+          ID_READBACK: ${{ steps.pages-id-first.outcome == 'success' && steps.pages-id-first.outputs.download-path || steps.pages-id-retry.outputs.download-path }}
+          NAME_READBACK: ${{ steps.pages-name-first.outcome == 'success' && steps.pages-name-first.outputs.download-path || steps.pages-name-retry.outputs.download-path }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_TAR" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$ID_READBACK"
+          test -n "$NAME_READBACK"
+          for path in "$ID_READBACK/$EXPECTED_NAME" "$NAME_READBACK"; do
+            test -f "$path/artifact.tar"
+            digest=$(sha256sum "$path/artifact.tar")
+            test "${digest%% *}" = "$EXPECTED_TAR"
+          done
+      - name: Reject a late main advance before deploying
+        id: final-freshness
+        if: steps.freshness.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
+          current=$(timeout 30s git -c credential.helper= ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main)
+          [[ "$current" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]
+          if [[ "${BASH_REMATCH[1]}" != "$GITHUB_SHA" ]]; then
+            echo 'Main advanced during artifact readback; refusing to deploy.' >&2
+            exit 1
+          fi
       - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
         if: steps.freshness.outputs.current == 'true'
         id: deployment

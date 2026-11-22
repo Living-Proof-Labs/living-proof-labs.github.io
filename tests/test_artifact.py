@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Artifact identity and actual deployment-freshness script regression checks."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -272,8 +273,108 @@ class DeployWorkflow(unittest.TestCase):
         self.assertIn("needs.release.outputs.published == 'true'", deploy['if'])
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.release_tag != ''", deploy['if'])
         artifact_name = 'github-pages-${{ github.run_attempt }}'
-        self.assertEqual(deploy['steps'][-2]['with']['name'], artifact_name)
+        upload = next(step for step in deploy['steps'] if step.get('id') == 'pages-artifact')
+        self.assertEqual(upload['with']['name'], artifact_name)
         self.assertEqual(deploy['steps'][-1]['with']['artifact_name'], artifact_name)
+
+
+    def test_pages_readback_uses_the_same_runtime_by_exact_id_and_name(self):
+        deploy = self.workflow['jobs']['deploy']
+        self.assertEqual(deploy['permissions'], {'contents': 'read', 'pages': 'write', 'id-token': 'write'})
+        steps = deploy['steps']
+        fresh = "steps.freshness.outputs.current == 'true'"
+        upload = next(step for step in steps if step.get('id') == 'pages-artifact')
+        self.assertEqual(steps[-3]['name'], 'Require matching ID and name readback of the exact tar')
+        self.assertEqual(steps[-1]['id'], 'deployment')
+        expected_name = upload['with']['name']
+        self.assertEqual(steps[-3]['env']['EXPECTED_NAME'], expected_name)
+        self.assertEqual(steps[-1]['with']['artifact_name'], expected_name)
+        self.assertTrue(all(step.get('if', '').startswith(fresh)
+                            for step in steps[steps.index(upload) - 1:]))
+        for route, selector, selected in (
+                ('id', 'artifact-ids', '${{ steps.pages-artifact.outputs.artifact-id }}'),
+                ('name', 'name', expected_name)):
+            first = next(step for step in steps if step.get('id') == f'pages-{route}-first')
+            retry = next(step for step in steps if step.get('id') == f'pages-{route}-retry')
+            self.assertTrue(first['continue-on-error'])
+            self.assertNotIn('continue-on-error', retry)
+            self.assertEqual(retry['if'], f"{fresh} && steps.pages-{route}-first.outcome == 'failure'")
+            self.assertEqual(first['uses'], retry['uses'])
+            self.assertEqual(first['uses'], steps[1]['uses'])
+            for step in (first, retry):
+                self.assertEqual(set(step['with']), {selector, 'path'})
+                self.assertEqual(step['with'][selector], selected)
+            self.assertNotEqual(first['with']['path'], retry['with']['path'])
+            readback = steps[-3]['env'][f'{route.upper()}_READBACK']
+            self.assertIn(f"steps.pages-{route}-first.outcome == 'success'", readback)
+            self.assertIn(f'steps.pages-{route}-retry.outputs.download-path', readback)
+
+    def test_main_must_still_match_after_readback_and_directly_before_deploy(self):
+        deploy = self.workflow['jobs']['deploy']
+        self.assertEqual(deploy['concurrency']['group'], 'github-pages')
+        start = next(step for step in deploy['steps'] if step.get('id') == 'freshness')
+        readback, final, publish = deploy['steps'][-3:]
+        self.assertEqual(readback['name'], 'Require matching ID and name readback of the exact tar')
+        self.assertEqual(final['id'], 'final-freshness')
+        self.assertEqual(publish['id'], 'deployment')
+        self.assertEqual(publish['if'], "steps.freshness.outputs.current == 'true'")
+        self.assertEqual(final['if'], publish['if'])
+        self.assertNotIn('continue-on-error', final)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git = root / 'git'
+            git.write_text('#!/bin/sh\n[ "$1 $2 $3 $4 $6" = "-c credential.helper= ls-remote --exit-code refs/heads/main" ] || exit 9\n'
+                           '[ "$5" = "https://github.com/$GITHUB_REPOSITORY.git" ] || exit 9\n'
+                           'cat "$TEST_REMOTE_FILE"\n')
+            git.chmod(0o755)
+            ref = root / 'remote-ref'
+            output = root / 'output'
+            env = dict(os.environ, PATH=str(root) + ':' + os.environ['PATH'], TEST_REMOTE_FILE=str(ref),
+                       GITHUB_REPOSITORY='Living-Proof-Labs/living-proof-labs.github.io',
+                       GITHUB_SHA=SHA, GITHUB_OUTPUT=str(output), GITHUB_STEP_SUMMARY=str(root / 'summary'))
+            ref.write_text(SHA + '\trefs/heads/main\n')
+            subprocess.run(['bash', '-c', start['run']], env=env, check=True)
+            self.assertEqual(output.read_text(), 'current=true\n')
+            subprocess.run(['bash', '-c', final['run']], env=env, check=True)
+            # Even with an unchanged, cached early success, a late main advance must fail.
+            ref.write_text('f' * 40 + '\trefs/heads/main\n')
+            stale = subprocess.run(['bash', '-c', final['run']], env=env, capture_output=True, text=True)
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn('Main advanced during artifact readback', stale.stderr)
+            self.assertEqual(output.read_text(), 'current=true\n')
+            ref.unlink()
+            unavailable = subprocess.run(['bash', '-c', final['run']], env=env, capture_output=True)
+            self.assertNotEqual(unavailable.returncode, 0)
+
+    def test_pages_readback_compares_both_downloads_to_the_produced_tar(self):
+        steps = self.workflow['jobs']['deploy']['steps']
+        record = next(step['run'] for step in steps if step.get('id') == 'pages-package')
+        check = steps[-3]['run']
+        for kind in ('exact', 'missing', 'wrong-id-bytes', 'wrong-name-bytes', 'wrong-attempt-name'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                work = Path(tmp)
+                (work / 'artifact.tar').write_bytes(b'verified sealed tar')
+                output = work / 'output'
+                env = dict(os.environ, RUNNER_TEMP=str(work), GITHUB_OUTPUT=str(output))
+                subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', record], env=env, check=True)
+                key, digest = output.read_text().strip().split('=', 1)
+                self.assertEqual(key, 'tar-sha256')
+                self.assertEqual(digest, hashlib.sha256(b'verified sealed tar').hexdigest())
+                name = 'github-pages-2'
+                by_id, by_name = work / 'id', work / 'name'
+                id_dir = by_id / ('github-pages-1' if kind == 'wrong-attempt-name' else name)
+                id_dir.mkdir(parents=True)
+                by_name.mkdir()
+                (id_dir / 'artifact.tar').write_bytes(
+                    b'other' if kind == 'wrong-id-bytes' else b'verified sealed tar')
+                if kind != 'missing':
+                    (by_name / 'artifact.tar').write_bytes(
+                        b'other' if kind == 'wrong-name-bytes' else b'verified sealed tar')
+                result = subprocess.run(
+                    ['bash', '-c', check], env=dict(env, EXPECTED_TAR=digest, EXPECTED_NAME=name,
+                                                    ID_READBACK=str(by_id), NAME_READBACK=str(by_name)),
+                    capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, kind == 'exact', result.stderr)
 
 
 if __name__ == '__main__':
