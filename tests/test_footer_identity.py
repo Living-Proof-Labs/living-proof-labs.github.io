@@ -90,7 +90,8 @@ class BuiltFooterIdentity(unittest.TestCase):
         publisher = identity['publisher']
         expected_content = content['tag'] if content.get('tag') else 'commit'
         expected_publisher = publisher['tag'] if publisher.get('tag') else 'commit'
-        expected = f'Docs: development · content {expected_content} · publisher {expected_publisher}'
+        label = publisher.get('version') or 'development'
+        expected = f'Docs: {label} · content {expected_content} · publisher {expected_publisher}'
 
         for name in sorted(set(identity['pages']) | {'source.html'}):
             with self.subTest(page=name):
@@ -189,7 +190,12 @@ class SyntheticFooterBuild(unittest.TestCase):
                  mock.patch.object(build_docs, 'LOCK', pub_repo / 'content.lock.json'), \
                  mock.patch.object(build_docs, 'BRAND_LOCK', pub_repo / 'docs-brand.lock.json'), \
                  mock.patch.object(build_docs, 'brand_css', return_value=b'/* brand */\n'), \
-                 mock.patch.dict(os.environ, {'CONTENT_DIR': str(content_repo), 'GITHUB_ACTIONS': 'false'}):
+                 mock.patch.dict(os.environ, {
+                     'CONTENT_DIR': str(content_repo),
+                     'GITHUB_ACTIONS': 'false',
+                     'PUBLISHER_VERSION': '',
+                     'PUBLISHER_SHA': '',
+                 }):
                 build_docs.main()
             site = pub_repo / 'artifacts/site'
             build_json = json.loads((site / 'build.json').read_text())
