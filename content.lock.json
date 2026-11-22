@@ -1,6 +1,5 @@
 {
-  "commit": "af0b0b0cc48d184548da66677a83fdd08f827fc3",
-  "manifest_sha256": "7dd900d2823cc74b6feadf472473c186f13cca15864bf7fce8261be0b52e2c50",
-  "mode": "documentation-v1",
-  "repository": "Living-Proof-Labs/.github"
+  "repository": "Living-Proof-Labs/.github",
+  "tag": "v1.2.0",
+  "commit": "2088fd12ac8b1eefbccc537fbd1ab894d80ab88b"
 }

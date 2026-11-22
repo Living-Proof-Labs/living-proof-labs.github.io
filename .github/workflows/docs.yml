@@ -16,7 +16,7 @@ jobs:
   version:
     permissions:
       contents: read
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release-candidate.yml@v9.9.1
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release-candidate.yml@v9.9.2
     with:
       replay-tag: ${{ inputs.release_tag || '' }}
   build:
@@ -137,7 +137,7 @@ jobs:
       (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
     permissions:
       contents: write
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.9.1
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.9.2
     with:
       expected-version: ${{ needs.build.outputs.artifact-version }}
       expected-commit: ${{ needs.build.outputs.artifact-commit }}
