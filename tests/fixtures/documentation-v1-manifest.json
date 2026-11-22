@@ -1,0 +1,72 @@
+{
+  "commit": "5ee53121d9ce5b8e730797f3970880da334a0820",
+  "files": [
+    {
+      "path": "docs/GITHUB-APPS.md",
+      "sha256": "5bb3ede05016f13c8fee92153d9b20ab374abe5c950fdf0b64c576717532ece0",
+      "size": 50789
+    },
+    {
+      "path": "docs/architecture/verification-architecture.md",
+      "sha256": "585225be108a3930e9df45519b55ff000a628afe5efb2a5d3b3f3a1c7e6e055c",
+      "size": 21292
+    },
+    {
+      "path": "docs/contribute.md",
+      "sha256": "fb8277304137431ea05c0e491193d5cf17f076dd84fb8c80053caf64b6cfb8e4",
+      "size": 6230
+    },
+    {
+      "path": "docs/directory.json",
+      "sha256": "91076706fe2d14f1f10611d36d1a1f538e34ee7e2d156c27a72b0193198b3063",
+      "size": 8013
+    },
+    {
+      "path": "docs/index.md",
+      "sha256": "b8e83d55e490e81ec988c6d60fe99410e7744c79c4a551da799dc85504dee8c2",
+      "size": 14228
+    },
+    {
+      "path": "docs/media/NOTICE.txt",
+      "sha256": "de97fe0c33a30f58a45940961b4d30787a92c7514928cb0040aeeb6f56f7cbd4",
+      "size": 2522
+    },
+    {
+      "path": "docs/media/g1-comparison-poster.jpg",
+      "sha256": "f4cf729e36fd5a6def52a151346e1aae842023694f74895ab3190452de361455",
+      "size": 45876
+    },
+    {
+      "path": "docs/media/g1-comparison.en.vtt",
+      "sha256": "7652f3d89dc87f712ba55926603391c5bd85d1ea0e1382dbe0f042880b246428",
+      "size": 1325
+    },
+    {
+      "path": "docs/media/g1-comparison.mp4",
+      "sha256": "918330b81b9e4de5c6a5b9c5b3aa81de21c42e9ddd246c049e8b1acdb07ca0ca",
+      "size": 1683202
+    },
+    {
+      "path": "docs/quickstart.md",
+      "sha256": "d695c94a6a279002be9aa0eec9e04719a4e075603816274c6f02639e321dfaff",
+      "size": 5436
+    },
+    {
+      "path": "docs/reading-reports.md",
+      "sha256": "800591dd0b6684c0268faa8b4e852c2339f5df3a292548cfb7dde652db00cdd9",
+      "size": 5478
+    },
+    {
+      "path": "docs/site.json",
+      "sha256": "daf31fdab0f06b55d01e73da81a7f4c59eec8d726cb65fddf4e636f5482690ed",
+      "size": 1499
+    },
+    {
+      "path": "docs/vision.md",
+      "sha256": "78b83726232676643ac54d9bc4d9fc47df33abcf746eb29e4da0416dc68edab2",
+      "size": 16212
+    }
+  ],
+  "repository": "Living-Proof-Labs/.github",
+  "schema_version": 1
+}

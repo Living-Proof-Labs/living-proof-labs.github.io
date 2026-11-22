@@ -2,9 +2,11 @@
 # Documentation-only source mode
 
 This support route implements [.github #152](https://github.com/Living-Proof-Labs/.github/issues/152).
-The committed production lock remains the existing release-tag lock. Adding this
-support does not activate new content, relax the source audit or publish a release.
-A separate reviewed lock change is required after independent support review.
+The committed production lock is `documentation-v1` for protected `.github` main
+`5ee53121d9ce5b8e730797f3970880da334a0820` (release tag v1.2.2 resolves to that
+same commit). The strict settings audit still runs in `.github` and is not an
+input to this lock. Tag mode remains available and is not a fallback from a
+failed documentation check. This lock does not publish an operational release.
 
 The explicit `documentation-v1` lock has exactly `mode`, `repository`, `commit`
 and `manifest_sha256`. The repository is fixed to `Living-Proof-Labs/.github`;

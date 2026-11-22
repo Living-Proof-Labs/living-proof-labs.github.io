@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import build_docs
 from check_artifact import artifact, emit_seal_outputs
+from docs_source import REQUIRED_JOBS, WORKFLOW, verify_evidence
 from publisher_release_identity import validate_delivery, validate_plan, verify_existing_release
 from test_artifact import LEGACY, RUN, SHA
 
@@ -19,6 +20,32 @@ PR = '1.2.3-pr.87.42.1'
 MAIN_PREVIEW = '1.2.4-main.43.1'
 STABLE = '1.2.3'
 OTHER = 'e' * 40
+
+
+def documentation_receipt(lock):
+    """Minimal source evidence for a documentation lock, including a failed audit."""
+    evidence = {
+        'branch': {'name': 'main', 'protected': True, 'commit': {'sha': lock['commit']}},
+        'comparison': {'status': 'identical', 'base_commit': {'sha': lock['commit']},
+                       'merge_base_commit': {'sha': lock['commit']}},
+        'run': {'id': 45077753889, 'run_attempt': 1, 'head_sha': lock['commit'],
+                'head_branch': 'main', 'event': 'push', 'path': WORKFLOW,
+                'status': 'completed', 'conclusion': 'success',
+                'repository': {'full_name': 'Living-Proof-Labs/.github'},
+                'head_repository': {'full_name': 'Living-Proof-Labs/.github'},
+                'html_url': 'https://github.com/Living-Proof-Labs/.github/actions/runs/45077753889'},
+        'jobs': [{'id': index + 10, 'name': name, 'run_id': 45077753889, 'run_attempt': 1,
+                  'head_sha': lock['commit'], 'status': 'completed', 'conclusion': 'success'}
+                 for index, name in enumerate(REQUIRED_JOBS)] + [
+                     {'name': 'Strict repository settings audit', 'conclusion': 'failure'}],
+    }
+    manifest = json.loads((ROOT / 'tests/fixtures/documentation-v1-manifest.json').read_text())
+    content = {'mode': lock['mode'], 'repository': lock['repository'], 'commit': lock['commit'],
+               'locked_commit': lock['commit'], 'tag': None, 'locked_tag': None,
+               'manifest_sha256': lock['manifest_sha256'], 'manifest': manifest,
+               'source_checks': verify_evidence(lock['commit'], evidence),
+               'pinned': True, 'dirty': False}
+    return content, {'lock': lock, 'evidence': evidence}
 
 
 class PublisherIdentity(unittest.TestCase):
@@ -99,8 +126,12 @@ class CommonVersionedBuild(unittest.TestCase):
                 'directory': 'docs/directory.json',
             }))
             build_lock = json.loads((ROOT / 'content.lock.json').read_text())
-            pinned = dict(build_lock, locked_commit=build_lock['commit'], locked_tag=build_lock['tag'],
-                          pinned=True, dirty=False)
+            if build_lock.get('mode') == 'documentation-v1':
+                pinned, receipt = documentation_receipt(build_lock)
+                (content / '.docs-provenance.json').write_text(json.dumps(receipt) + '\n')
+            else:
+                pinned = dict(build_lock, locked_commit=build_lock['commit'],
+                              locked_tag=build_lock['tag'], pinned=True, dirty=False)
             calls = []
 
             def command(*args, **_kwargs):

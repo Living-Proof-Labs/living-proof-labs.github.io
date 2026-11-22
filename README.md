@@ -15,16 +15,16 @@ reference, redirects, link checks, source identity and deployment. The docs bran
 change it there, not here. Search covers only the
 published root pages, not other repositories' manuals.
 
-`content.lock.json` pins one released `.github` tag and its resolved commit. A
-content change merges and releases in `.github` first; a pull request here then
-moves the pin. Renovate tracks this lock with the `github-tags` datasource,
-updating the release tag and its commit digest together. Keep the lock fields in
-`repository`, `tag`, `commit` order for the regex manager. The pin and build checks
-still reject mismatched or unmerged releases; dependency updates require review.
-A separately reviewed `documentation-v1` mode can instead project only docs data
-from an exact protected-main commit with successful source documentation checks.
-See [the docs-only source contract](docs/docs-only-support-draft.md). The committed
-production lock is unchanged; this is not an automatic mode switch or audit bypass.
+`content.lock.json` is a reviewed `documentation-v1` pin of protected
+`.github` main `5ee53121d9ce5b8e730797f3970880da334a0820`, the commit release
+tag v1.2.2 resolves to, and the SHA-256 of that documentation payload. The
+publisher acquires those docs through the canonical GitHub API. The strict
+settings audit is not an input to this pin, and this lock does not publish an
+operational `.github` release. A later protected-main commit needs its own
+reviewed lock. Renovate's release-tag pattern does not match this schema.
+Tag mode remains implemented for a lock that still names `repository`, `tag`,
+and `commit`; it is not a fallback when documentation checks fail.
+See [the docs-only source contract](docs/docs-only-support-draft.md).
 `build.json` and every page record both the content and the
 publisher revision. When that revision contains `docs/media/`, the build copies
 the whole directory into the site's `media/` path, including `NOTICE.txt`,

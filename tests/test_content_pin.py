@@ -40,6 +40,10 @@ def make_content_repo(repo, *, tag='v1.0.0', tag_on_branch_only=False):
     return commit
 
 
+REVIEWED_SOURCE = '5ee53121d9ce5b8e730797f3970880da334a0820'
+REVIEWED_DIGEST = '5fdba0b6449451f2e1d802f95be8dc0219fb6fca63d9de4acf32ff6b7b539c83'
+
+
 class CommittedLock(unittest.TestCase):
     def test_committed_content_lock_pins_a_supported_exact_source(self):
         lock = json.loads((ROOT / 'content.lock.json').read_text())
@@ -49,6 +53,16 @@ class CommittedLock(unittest.TestCase):
             self.assertEqual(set(lock), {'mode', 'repository', 'commit', 'manifest_sha256'})
         else:
             self.assertEqual(set(lock), {'repository', 'tag', 'commit'})
+
+    def test_committed_lock_is_the_reviewed_documentation_payload(self):
+        lock = json.loads((ROOT / 'content.lock.json').read_text())
+        self.assertEqual(lock, {
+            'mode': 'documentation-v1',
+            'repository': 'Living-Proof-Labs/.github',
+            'commit': REVIEWED_SOURCE,
+            'manifest_sha256': REVIEWED_DIGEST,
+        })
+        self.assertNotIn('tag', lock)
 
 
 class PinReachability(unittest.TestCase):
