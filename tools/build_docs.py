@@ -28,7 +28,7 @@ from urllib.parse import urlsplit, urlunsplit
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check_content_pin import lock_errors, tag_commit  # noqa: E402
+from check_content_pin import TAG_PATTERN, lock_errors, tag_commit  # noqa: E402
 from publisher_release_identity import validate_version  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,8 +68,8 @@ def brand_css():
     return data
 
 
-def command(*args, cwd=ROOT):
-    return subprocess.check_output(args, cwd=cwd, text=True).strip()
+def command(*args, cwd=None):
+    return subprocess.check_output(args, cwd=cwd or ROOT, text=True).strip()
 
 
 def installed_zensical():
@@ -197,11 +197,23 @@ def redirect_page(target, base):
             f'<body><p>This page moved to <a href="{href}">{href}</a>.</p></body></html>\n')
 
 
+def publisher_release_tag(repo=None, ref='HEAD', *, dirty=False):
+    """Return the highest vX.Y.Z release tag on ref when the checkout is clean, or None."""
+    if dirty:
+        return None
+    output = command('git', 'tag', '--points-at', ref, cwd=repo or ROOT)
+    tags = [line.strip() for line in output.splitlines() if TAG_PATTERN.fullmatch(line.strip())]
+    if not tags:
+        return None
+    return max(tags, key=lambda tag: tuple(int(part) for part in tag[1:].split('.')))
+
+
 def main():
     sha = command('git', 'rev-parse', 'HEAD')
     dirty = bool(command('git', 'status', '--porcelain', '--untracked-files=normal'))
     if os.environ.get('GITHUB_ACTIONS') == 'true' and dirty:
         raise SystemExit('Refusing CI publication from a dirty source tree')
+    publisher_tag = publisher_release_tag(ROOT, dirty=dirty)
     lock = json.loads(LOCK.read_text())
     errors = lock_errors(lock)
     if errors:
@@ -213,16 +225,18 @@ def main():
     source.mkdir(parents=True)
     content_url = f'https://github.com/{content["repository"]}'
     blob = f'{content_url}/blob/{content["commit"]}/'
+    publisher_repo_url = f'https://github.com/{PUBLISHER}'
+    publisher_url = f'{publisher_repo_url}/tree/{sha}'
     publisher_version = os.environ.get('PUBLISHER_VERSION', '')
     if publisher_version or os.environ.get('GITHUB_ACTIONS') == 'true':
         validate_version(publisher_version)
         if sha != os.environ.get('PUBLISHER_SHA') or dirty:
             raise SystemExit('Shared build version requires the exact clean publisher commit')
-    publisher_url = f'https://github.com/{PUBLISHER}/tree/{sha}'
-    content_label = f'{content["tag"]} ({content["commit"][:7]})' if content.get('tag') else content['commit'][:7]
+    content_label = content['tag'] if content.get('tag') else 'commit'
+    publisher_label = publisher_tag if publisher_tag else 'commit'
     flags = (' · local changes' if dirty else '') + ('' if content['pinned'] else ' · content not at pinned revision')
     label = publisher_version or 'development'
-    identity = f'Docs: {label} · content {content_label} · publisher {sha[:7]}{flags}'
+    identity = f'Docs: {label} · content {content_label} · publisher {publisher_label}{flags}'
     pages = {p['source']: p['path'] for p in site['pages']}
     licenses = {p['path']: p['license'] for p in site['pages']}
     tables = directory_tables(json.loads((content_root / site['directory']).read_text()))
@@ -280,7 +294,7 @@ def main():
     redirects = site.get('redirects', {})
     generator_name, generator_version = installed_zensical()
     generator_label = generator_name[:1].upper() + generator_name[1:]
-    publisher_info = {'repository': PUBLISHER, 'commit': sha, 'dirty': dirty,
+    publisher_info = {'repository': PUBLISHER, 'tag': publisher_tag, 'commit': sha, 'dirty': dirty,
                       'source_files': publisher_files}
     if publisher_version and not dirty:
         publisher_info['version'] = publisher_version
@@ -297,6 +311,12 @@ def main():
         if content.get('tag') else
         f'[`{content["commit"]}`]({content_url}/tree/{content["commit"]})'
     )
+    publisher_rev = (
+        f'[`{publisher_tag}`]({publisher_repo_url}/releases/tag/{publisher_tag}) '
+        f'([`{sha}`]({publisher_url}))'
+        if publisher_tag else
+        f'[`{sha}`]({publisher_url})'
+    )
     source_checks = content.get('source_checks')
     docs_evidence = (f'Documentation payload SHA-256: `{content["manifest_sha256"]}`. '
                      f'[Source documentation checks]({source_checks["url"]}), '
@@ -309,7 +329,7 @@ def main():
 | Role | Repository | Revision |
 | --- | --- | --- |
 | Content (authored) | [{content["repository"]}]({content_url}) | {content_rev} |
-| Publisher (build, theme, search) | [{PUBLISHER}](https://github.com/{PUBLISHER}) | [`{sha}`]({publisher_url}) |
+| Publisher (build, theme, search) | [{PUBLISHER}]({publisher_repo_url}) | {publisher_rev} |
 
 Content pinned by `content.lock.json`: **{content["pinned"]}** (`{content.get("mode") or content["locked_tag"]}` at `{content["locked_commit"][:12]}`). Local content changes:
 **{content["dirty"]}**. Local publisher changes: **{dirty}**.
@@ -338,8 +358,22 @@ evidence remain independent.
         here = f'{up}/' if up != '.' else ''
         origin = next((src for src, dest in pages.items() if dest == rel), None)
         page_source = blob + origin if origin else publisher_url
+        content_href = page_source if origin else (
+            f'{content_url}/releases/tag/{content["tag"]}'
+            if content.get('tag') else f'{content_url}/tree/{content["commit"]}'
+        )
+        publisher_href = (
+            f'{publisher_repo_url}/releases/tag/{publisher_tag}'
+            if publisher_tag else publisher_url
+        )
+        identity_links = (
+            f'Docs: {label} · '
+            f'content [{content_label}]({content_href} "content {content["commit"]}") · '
+            f'publisher [{publisher_label}]({publisher_href} "publisher {sha}")'
+            f'{flags}'
+        )
         pos = text.find('\n', text.find('# '))
-        text = (text[:pos] + f'\n\n<div class="docs-identity" markdown>[{identity}]({page_source})'
+        text = (text[:pos] + f'\n\n<div class="docs-identity" markdown>{identity_links}'
                 f' · [Version and source]({here}source.md)</div>\n' + text[pos:])
         issues = f'{content_url}/issues' if origin else f'https://github.com/{PUBLISHER}/issues'
         text += (f'\n---\n\n[Documentation home](https://docs.livingprooflabs.com/) · '

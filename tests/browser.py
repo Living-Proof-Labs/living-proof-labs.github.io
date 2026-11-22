@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import re
 import threading
 import time
 import unittest
@@ -16,6 +17,7 @@ from playwright.sync_api import sync_playwright, expect
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / 'artifacts'
 CONTENT = Path(os.environ.get('CONTENT_DIR') or ROOT / '.content').resolve()
+COMMIT_ID = re.compile(r'\b(?=[0-9]*[a-f])[0-9a-f]{7,40}\b')
 # brand.css imports these faces. Offline CI (docker --network none) cannot fetch
 # them; they are not site files and not the GitHub releases lookup.
 EXCUSED_REQUEST_PREFIXES = (
@@ -435,20 +437,39 @@ class BrowserTests(unittest.TestCase):
                 }''')
                 self.page.screenshot(path=str(ARTIFACTS / f'recording-{width}-{scheme}.png'))
 
+    def _assert_clean_identity_footer(self, build):
+        content, publisher = build['content'], build['publisher']
+        label = publisher.get('version') or 'development'
+        expected_content = content.get('tag') or 'commit'
+        expected_publisher = publisher.get('tag') or 'commit'
+        expected = f'Docs: {label} · content {expected_content} · publisher {expected_publisher}'
+        identity = self.page.locator('.docs-identity')
+        expect(identity).to_contain_text(expected)
+        visible = ' '.join(identity.inner_text().split())
+        self.assertEqual(COMMIT_ID.findall(visible), [], visible)
+        self.assertNotIn(content['commit'][:7], visible)
+        self.assertNotIn(publisher['commit'][:7], visible)
+        attrs = identity.locator('a').evaluate_all(
+            'els => els.flatMap(e => [e.getAttribute("href") || "", e.getAttribute("title") || ""])'
+        )
+        attr_text = ' '.join(attrs)
+        self.assertIn(content['commit'], attr_text)
+        self.assertIn(publisher['commit'], attr_text)
+
     def test_directory_identity_tasks_and_license(self):
+        build = json.loads((ARTIFACTS / 'site' / 'build.json').read_text(encoding='utf-8'))
         tasks = first_table_rows((CONTENT / 'docs' / 'index.md').read_text(encoding='utf-8'))
         self.assertGreater(tasks, 0)
         expect(self.page.locator('article table').first.locator('tbody tr')).to_have_count(tasks)
-        build = json.loads((ARTIFACTS / 'site/build.json').read_text())
-        label = build['publisher'].get('version', 'development')
-        expect(self.page.locator('.docs-identity')).to_contain_text(f'Docs: {label}')
-        expect(self.page.locator('.docs-identity')).to_contain_text('publisher ')
+        self._assert_clean_identity_footer(build)
         self.assertIn('current scope', self.page.locator('article').inner_text().lower())
         self.page.goto(self.base + '/tasks.html')
+        self._assert_clean_identity_footer(build)
         for name in ('setup', 'build', 'check', 'test', 'verify'):
             expect(self.page.locator('#' + name)).to_have_count(1)
         self.assertNotIn('/workspace/', self.page.locator('article').inner_text())
         self.page.goto(self.base + '/vision.html')
+        self._assert_clean_identity_footer(build)
         expect(self.page.locator('article')).to_contain_text('License: Apache-2.0')
         expect(self.page.locator('article')).to_contain_text('not proof of root cause')
 

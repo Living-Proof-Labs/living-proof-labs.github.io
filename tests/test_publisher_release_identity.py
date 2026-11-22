@@ -106,6 +106,7 @@ class CommonVersionedBuild(unittest.TestCase):
             def command(*args, **_kwargs):
                 return {('git', 'rev-parse', 'HEAD'): SHA,
                         ('git', 'status', '--porcelain', '--untracked-files=normal'): '',
+                        ('git', 'tag', '--points-at', 'HEAD'): '',
                         ('task', '--list', '--json'): '{"tasks": []}'}[args]
 
             def render(args, **kwargs):
@@ -134,7 +135,7 @@ class CommonVersionedBuild(unittest.TestCase):
                     built = json.loads((site / 'build.json').read_text())
                     self.assertEqual(built['publisher']['version'], version)
                     self.assertEqual(built['publisher']['commit'], SHA)
-                    self.assertNotIn('tag', built['publisher'])
+                    self.assertIsNone(built['publisher']['tag'])
                     self.assertIn(f'Docs: {version}', (site / 'index.html').read_text())
                     self.assertIn(f'https://github.com/Living-Proof-Labs/living-proof-labs.github.io/tree/{SHA}',
                                   (site / 'source.html').read_text())

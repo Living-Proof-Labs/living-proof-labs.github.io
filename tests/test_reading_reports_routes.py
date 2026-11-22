@@ -45,12 +45,12 @@ class HtmlRoutes(unittest.TestCase):
         ):
             self.assertIn(phrase, text)
         lock = json.loads((ROOT / 'content.lock.json').read_text())
-        short_commit = lock['commit'][:7]
-        if lock.get('mode') == 'documentation-v1':
-            label = short_commit
+        if lock.get('mode') == 'documentation-v1' or not lock.get('tag'):
+            label = 'commit'
         else:
-            label = f"{lock['tag']} ({short_commit})"
+            label = lock['tag']
         self.assertIn(f' · content {label} · publisher ', text)
+        self.assertNotIn(lock['commit'][:7], text)
 
     def test_guide_canonical_url_is_html_route(self):
         canonical = re.search(r'<link rel="canonical" href="([^"]+)"',
