@@ -4,8 +4,11 @@
 # That probe is rejected once main has moved, before any tag is created, and the
 # shared writer then aborts the sealed release. Publication itself only pushes
 # tags and notes. Accept the non-fast-forward probe when this commit is still an
-# ancestor of main. Refuse force pushes, forced refspecs, and branch updates,
-# including when they follow git's global options.
+# ancestor of main.
+#
+# Only the subcommands this release actually runs are forwarded. Command-line
+# config (-c and --config-env) is refused: semantic-release does not set any,
+# and an alias or url.*.insteadOf there can turn another word into a push.
 set -euo pipefail
 
 real=${GIT_REAL:-/usr/bin/git}
@@ -19,18 +22,19 @@ refuse() {
   exit 1
 }
 
-# Git global options sit before the subcommand. Skip the known ones so
-# `git -c … push` and `git -C … push` are judged as pushes. Anything else
-# that looks like an option is refused rather than executed.
+# Git global options sit before the subcommand. -C and --git-dir are skipped
+# so the subcommand can be judged. -c and --config-env are never forwarded.
 orig=("$@")
 idx=0
 count=${#orig[@]}
 while [[ $idx -lt $count ]]; do
   token=${orig[$idx]}
   case "$token" in
-    -c|--config-env)
-      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
-      idx=$((idx + 2))
+    -c|-c?*)
+      refuse "refusing a git config override"
+      ;;
+    --config-env|--config-env=*)
+      refuse "refusing a git config override"
       ;;
     -C)
       [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
@@ -39,9 +43,6 @@ while [[ $idx -lt $count ]]; do
     --git-dir|--work-tree|--namespace|--super-prefix)
       [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
       idx=$((idx + 2))
-      ;;
-    -c?*|--config-env=*)
-      idx=$((idx + 1))
       ;;
     -C?*)
       idx=$((idx + 1))
@@ -68,10 +69,28 @@ while [[ $idx -lt $count ]]; do
   esac
 done
 
-if [[ $idx -ge $count || ${orig[$idx]} != push ]]; then
-  exec "$real" "${orig[@]}"
+if [[ $idx -ge $count ]]; then
+  refuse "refusing an unknown git subcommand"
 fi
 set -- "${orig[@]:$idx}"
+
+case "$1" in
+  rev-parse|rev-list|tag|log|fetch|ls-remote|notes|check-ref-format|for-each-ref)
+    exec "$real" "${orig[@]}"
+    ;;
+  config)
+    # semantic-release reads the origin URL and does not write config.
+    if [[ $# -eq 3 && "$2" == --get && "$3" == remote.origin.url ]]; then
+      exec "$real" "${orig[@]}"
+    fi
+    refuse "refusing a git config change"
+    ;;
+  push)
+    ;;
+  *)
+    refuse "refusing an unknown git subcommand"
+    ;;
+esac
 
 for arg in "$@"; do
   case "$arg" in

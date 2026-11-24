@@ -134,6 +134,9 @@ class ReleaseGitGuard(unittest.TestCase):
             'refusing a forced refspec',
             'refusing a push that is not a tag or notes update',
             'refusing an unrecognized git option',
+            'refusing a git config override',
+            'refusing a git config change',
+            'refusing an unknown git subcommand',
         ):
             if other != message:
                 self.assertNotIn(other, result.stderr)
@@ -174,8 +177,6 @@ class ReleaseGitGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fake, log = recording_git(tmp)
             cases = [
-                ['-c', 'core.commentChar=+', 'push', '--force', '--tags', '--', URL],
-                ['-cprotocol.version=2', 'push', '--force', '--tags', '--', URL],
                 ['--git-dir=/tmp/not-a-repo', 'push', '--force', '--', URL, 'HEAD:main'],
                 ['--git-dir', '/tmp/not-a-repo', 'push', '--force-with-lease', '--', URL, 'HEAD:main'],
             ]
@@ -189,7 +190,7 @@ class ReleaseGitGuard(unittest.TestCase):
             cases = [
                 ['-C', '/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
                 ['-C/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
-                ['-c', 'k=v', '-C', '/tmp/not-used', 'push', '--', URL, '+refs/heads/main'],
+                ['-C', '/tmp/not-used', 'push', '--', URL, '+refs/heads/main'],
             ]
             expectations = [
                 'refusing a push that is not a tag or notes update',
@@ -204,9 +205,9 @@ class ReleaseGitGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fake, log = recording_git(tmp)
             cases = [
-                ['-c', 'protocol.version=2', 'push', '--tags', '--', URL],
                 ['-C', '/tmp/not-used', 'rev-parse', 'HEAD'],
-                ['--git-dir=/tmp/not-a-repo', 'status'],
+                ['--git-dir=/tmp/not-a-repo', 'rev-parse', '--git-dir'],
+                ['--', 'tag', '--merged', 'main'],
             ]
             for args in cases:
                 log.write_text('')
@@ -214,6 +215,102 @@ class ReleaseGitGuard(unittest.TestCase):
                     result = run_guard(*args, cwd=tmp, git_real=str(fake))
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(log.read_text().strip(), ' '.join(args))
+
+    def test_command_line_alias_cannot_push_a_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bare, built = root / 'bare.git', root / 'built'
+            git('init', '--bare', '-b', 'main', str(bare))
+            git('clone', str(bare), str(built))
+            built_sha = commit(built, 'sealed fix')
+            git('push', 'origin', 'HEAD:main', repo=built)
+            alias = run_guard(
+                '-c', 'alias.p=push', 'p', '--force', '--', str(bare), 'HEAD:main', cwd=built)
+            self.assertNotEqual(alias.returncode, 0, alias.stderr)
+            self.assertIn('refusing a git config override', alias.stderr)
+            self.assertNotIn('refusing an unknown git subcommand', alias.stderr)
+            attached = run_guard(
+                '-calias.p=push', 'p', '--force', '--', str(bare), 'HEAD:main', cwd=built)
+            self.assertIn('refusing a git config override', attached.stderr)
+            self.assertNotIn('refusing an unknown git subcommand', attached.stderr)
+            env = dict(ENV, AL='push')
+            configured = subprocess.run(
+                [str(GUARD), '--config-env=alias.q=AL', 'q', '--', str(bare), 'HEAD:refs/heads/evil'],
+                cwd=built, capture_output=True, text=True, env=env)
+            self.assertNotEqual(configured.returncode, 0, configured.stderr)
+            self.assertIn('refusing a git config override', configured.stderr)
+            self.assertNotIn('refusing an unknown git subcommand', configured.stderr)
+            separate = run_guard(
+                '--config-env', 'alias.q=AL', 'q', '--', str(bare), 'HEAD:refs/heads/evil', cwd=built)
+            self.assertIn('refusing a git config override', separate.stderr)
+            self.assertNotIn('refusing an unrecognized git option', separate.stderr)
+            self.assertEqual(git('rev-parse', 'refs/heads/main', repo=bare).stdout.strip(), built_sha)
+            self.assertNotEqual(git('rev-parse', '--verify', 'refs/heads/evil', repo=bare, check=False).returncode, 0)
+
+    def test_config_override_cannot_rewrite_the_push_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['-c', 'url.https://github.com/.insteadOf=https://evil.example/', 'push', '--tags', '--', URL],
+                ['-c', 'url.https://github.com/.pushInsteadOf=https://evil.example/', 'push', '--tags', '--', URL],
+                ['-c', 'core.sshCommand=evil', 'push', '--tags', '--', URL],
+                ['-ccore.hooksPath=/tmp/hooks', 'push', '--tags', '--', URL],
+            ]
+            for args in cases:
+                with self.subTest(args=args):
+                    self.assert_refused(args, 'refusing a git config override', tmp, str(fake), log)
+
+    def test_unknown_subcommand_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            for args in (['status'], ['commit', '-m', 'nope'], ['p', '--force', '--', URL, 'HEAD:main']):
+                with self.subTest(args=args):
+                    self.assert_refused(args, 'refusing an unknown git subcommand', tmp, str(fake), log)
+
+    def test_release_subcommands_are_forwarded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['rev-parse', 'HEAD'],
+                ['rev-parse', '--is-shallow-repository'],
+                ['rev-parse', '--abbrev-ref', 'HEAD'],
+                ['rev-parse', '--verify', 'HEAD'],
+                ['rev-parse', '--git-dir'],
+                ['rev-list', '-1', 'v1.2.3'],
+                ['tag', '--merged', 'main'],
+                ['tag', 'v1.2.3', 'HEAD'],
+                ['log', '-z', '--format=%H%x00%B', 'HEAD'],
+                ['log', '--tags=*', '--decorate-refs=refs/tags/*', '--no-walk', '--format=%d%x09%N'],
+                ['fetch', '--tags', '--', URL],
+                ['fetch', 'origin', 'refs/tags/v1.2.3:refs/tags/v1.2.3', '--force'],
+                ['ls-remote', '--heads', '--', URL],
+                ['ls-remote', '--tags', '--', URL, 'refs/tags/v1.2.3'],
+                ['config', '--get', 'remote.origin.url'],
+                ['-C', '/tmp/not-used', 'config', '--get', 'remote.origin.url'],
+                ['notes', '--ref', 'semantic-release-v1.2.3', 'add', '-f', '-m', '{}', 'HEAD'],
+                ['check-ref-format', 'refs/tags/v1.2.3'],
+                ['check-ref-format', 'refs/heads/main'],
+                ['for-each-ref', '--format=%(refname:short)', 'refs/tags'],
+                ['push', '--tags', '--', URL],
+                ['push', '--', URL, 'refs/notes/semantic-release-v1.2.3'],
+                ['--', 'rev-parse', 'HEAD'],
+            ]
+            for args in cases:
+                log.write_text('')
+                with self.subTest(args=args):
+                    result = run_guard(*args, cwd=tmp, git_real=str(fake))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(log.read_text().strip(), ' '.join(args))
+
+    def test_config_writes_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['config', 'alias.p', 'push'],
+                'refusing a git config change', tmp, str(fake), log)
+            self.assert_refused(
+                ['config', '--replace-all', 'url.https://github.com/.insteadOf', 'https://evil.example/'],
+                'refusing a git config change', tmp, str(fake), log)
 
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
