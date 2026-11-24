@@ -45,6 +45,12 @@ def recording_git(tmp):
 
 
 URL = 'https://example.test/repo.git'
+SHA = 'a' * 40
+LOG_PARSER_FORMAT = (
+    '%H==FIELD==%h==FIELD==%T==FIELD==%t==FIELD==%an==FIELD==%ae==FIELD==%ai==FIELD=='
+    '%cn==FIELD==%ce==FIELD==%ci==FIELD==%s==FIELD==%b==FIELD==%H==FIELD==%B==FIELD=='
+    '%d==FIELD==%ci==END==')
+FOR_EACH_REF_FORMAT = '%(refname:short)%00%(objecttype)%00%(objectname)%00%(*objectname)'
 
 
 class ReleaseGitGuard(unittest.TestCase):
@@ -137,6 +143,14 @@ class ReleaseGitGuard(unittest.TestCase):
             'refusing a git config override',
             'refusing a git config change',
             'refusing an unknown git subcommand',
+            'refusing a remote command option',
+            'refusing a notes refspec',
+            'refusing fetch arguments',
+            'refusing tag arguments',
+            'refusing notes arguments',
+            'refusing for-each-ref arguments',
+            'refusing ls-remote arguments',
+            'refusing rev-parse arguments',
         ):
             if other != message:
                 self.assertNotIn(other, result.stderr)
@@ -275,24 +289,37 @@ class ReleaseGitGuard(unittest.TestCase):
                 ['rev-parse', '--is-shallow-repository'],
                 ['rev-parse', '--abbrev-ref', 'HEAD'],
                 ['rev-parse', '--verify', 'HEAD'],
+                ['rev-parse', '--verify', SHA],
+                ['rev-parse', '--verify', 'refs/tags/v1.2.3^{commit}'],
+                ['rev-parse', '--verify', 'v1.2.3^{commit}'],
                 ['rev-parse', '--git-dir'],
                 ['rev-list', '-1', 'v1.2.3'],
+                ['rev-list', '-1', SHA],
                 ['tag', '--merged', 'main'],
-                ['tag', 'v1.2.3', 'HEAD'],
+                ['tag', '--merged', SHA],
+                ['tag', 'v1.2.3', SHA],
                 ['log', '-z', '--format=%H%x00%B', 'HEAD'],
-                ['log', '--tags=*', '--decorate-refs=refs/tags/*', '--no-walk', '--format=%d%x09%N'],
+                ['log', '-z', '--format=%H%x00%B', f'v1.2.3..{SHA}'],
+                ['log', f'--format={LOG_PARSER_FORMAT}', f'{SHA}..{SHA}'],
+                ['log', '--tags=*', '--decorate-refs=refs/tags/*', '--no-walk',
+                 '--format=%d%x09%N', '--notes=refs/notes/semantic-release*'],
+                ['fetch', '--unshallow', '--tags', '--', URL],
                 ['fetch', '--tags', '--', URL],
+                ['fetch', '--unshallow', '--', URL, '+refs/notes/*:refs/notes/*'],
+                ['fetch', '--', URL, '+refs/notes/*:refs/notes/*'],
                 ['fetch', 'origin', 'refs/tags/v1.2.3:refs/tags/v1.2.3', '--force'],
                 ['ls-remote', '--heads', '--', URL],
+                ['ls-remote', '--heads', '--', URL, 'main'],
                 ['ls-remote', '--tags', '--', URL, 'refs/tags/v1.2.3'],
                 ['config', '--get', 'remote.origin.url'],
                 ['-C', '/tmp/not-used', 'config', '--get', 'remote.origin.url'],
-                ['notes', '--ref', 'semantic-release-v1.2.3', 'add', '-f', '-m', '{}', 'HEAD'],
-                ['check-ref-format', 'refs/tags/v1.2.3'],
+                ['notes', '--ref', 'semantic-release-v1.2.3', 'add', '-f', '-m', '{}', 'v1.2.3'],
+                ['check-ref-format', 'refs/tags/v0.0.0'],
                 ['check-ref-format', 'refs/heads/main'],
-                ['for-each-ref', '--format=%(refname:short)', 'refs/tags'],
+                ['for-each-ref', f'--format={FOR_EACH_REF_FORMAT}', 'refs/tags'],
                 ['push', '--tags', '--', URL],
                 ['push', '--', URL, 'refs/notes/semantic-release-v1.2.3'],
+                ['push', '--', URL, 'refs/notes/a:refs/notes/b'],
                 ['--', 'rev-parse', 'HEAD'],
             ]
             for args in cases:
@@ -311,6 +338,65 @@ class ReleaseGitGuard(unittest.TestCase):
             self.assert_refused(
                 ['config', '--replace-all', 'url.https://github.com/.insteadOf', 'https://evil.example/'],
                 'refusing a git config change', tmp, str(fake), log)
+
+    def test_notes_push_cannot_create_a_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bare, built = root / 'bare.git', root / 'built'
+            git('init', '--bare', '-b', 'main', str(bare))
+            git('clone', str(bare), str(built))
+            built_sha = commit(built, 'sealed fix')
+            git('push', 'origin', 'HEAD:main', repo=built)
+            git('update-ref', 'refs/notes/x', built_sha, repo=built)
+            bad = run_guard('push', '--', str(bare), 'refs/notes/x:refs/heads/evil', cwd=built)
+            self.assertNotEqual(bad.returncode, 0, bad.stderr)
+            self.assertIn('refusing a notes refspec', bad.stderr)
+            self.assertNotIn('refusing a push that is not a tag or notes update', bad.stderr)
+            self.assertNotEqual(
+                git('rev-parse', '--verify', 'refs/heads/evil', repo=bare, check=False).returncode, 0)
+            plus = run_guard('push', '--', str(bare), '+refs/notes/semantic-release-v1.2.3', cwd=built)
+            self.assertNotEqual(plus.returncode, 0)
+            self.assertIn('refusing a forced refspec', plus.stderr)
+
+    def test_fetch_cannot_run_a_remote_command_or_update_a_branch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / 'PWNED'
+            bare, built = root / 'bare.git', root / 'built'
+            git('init', '--bare', '-b', 'main', str(bare))
+            git('clone', str(bare), str(built))
+            commit(built, 'sealed fix')
+            packed = run_guard(
+                'fetch', f'--upload-pack=touch {marker}', str(bare), 'main', cwd=built)
+            self.assertNotEqual(packed.returncode, 0, packed.stderr)
+            self.assertIn('refusing a remote command option', packed.stderr)
+            self.assertFalse(marker.exists())
+            fake, log = recording_git(tmp)
+            cases = [
+                (['fetch', '--upload-pack=touch /tmp/PWNED', str(bare), 'main'],
+                 'refusing a remote command option'),
+                (['fetch', '-u', 'touch /tmp/PWNED', str(bare)], 'refusing a remote command option'),
+                (['ls-remote', '--upload-pack=touch /tmp/PWNED', URL], 'refusing a remote command option'),
+                (['fetch', '--receive-pack=touch /tmp/PWNED', URL], 'refusing a remote command option'),
+                (['fetch', '--exec=touch /tmp/PWNED', URL], 'refusing a remote command option'),
+                (['fetch', '--update-head-ok', '--', URL, '+refs/heads/main:refs/heads/main'],
+                 'refusing fetch arguments'),
+                (['fetch', 'origin', '+refs/heads/main:refs/heads/main'], 'refusing fetch arguments'),
+                (['fetch', '--tags', '--', URL, 'refs/notes/x:refs/heads/main'], 'refusing fetch arguments'),
+                (['tag', '-f', 'v1.2.3', SHA], 'refusing tag arguments'),
+                (['tag', 'refs/heads/evil', SHA], 'refusing tag arguments'),
+                (['notes', '--ref', 'refs/heads/evil', 'add', '-f', '-m', '{}', 'v1.2.3'],
+                 'refusing notes arguments'),
+                (['for-each-ref', '--format=%(authordate)', 'refs/heads'],
+                 'refusing for-each-ref arguments'),
+                (['config', '--get', 'include.path'], 'refusing a git config change'),
+                (['config', '--get', '--file', str(root / 'evil'), 'remote.origin.url'],
+                 'refusing a git config change'),
+                (['ls-remote', '--heads', '--upload-pack=touch', URL], 'refusing a remote command option'),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args):
+                    self.assert_refused(args, message, tmp, str(fake), log)
 
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:

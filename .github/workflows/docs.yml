@@ -161,6 +161,14 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      # A detached checkout makes semantic-release fetch +refs/heads/main.
+      # Stay on main at this exact commit so that fetch does not update a branch.
+      - name: Attach main at the sealed commit
+        run: |
+          set -euo pipefail
+          git checkout --force -B main "$GITHUB_SHA"
+          test "$(git rev-parse --abbrev-ref HEAD)" = main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Install the tag-only git guard
         run: |
           dir="$RUNNER_TEMP/release-git"

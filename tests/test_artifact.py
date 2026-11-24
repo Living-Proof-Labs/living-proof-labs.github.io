@@ -285,7 +285,11 @@ class DeployWorkflow(unittest.TestCase):
         self.assertEqual(checkout['with'], {
             'ref': '${{ github.sha }}', 'fetch-depth': 0, 'persist-credentials': False,
         })
-        guard = release['steps'][1]
+        attach = next(step for step in release['steps'] if 'checkout --force -B main' in step.get('run', ''))
+        self.assertIn('git rev-parse --abbrev-ref HEAD', attach['run'])
+        guard = next(step for step in release['steps'] if 'tools/release_git' in step.get('run', ''))
+        self.assertLess(release['steps'].index(checkout), release['steps'].index(attach))
+        self.assertLess(release['steps'].index(attach), release['steps'].index(guard))
         self.assertLess(release['steps'].index(guard), release['steps'].index(writer))
         self.assertIn('cp tools/release_git "$dir/git"', guard['run'])
         self.assertIn('echo "$dir" >> "$GITHUB_PATH"', guard['run'])

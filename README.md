@@ -98,7 +98,9 @@ runs cannot publish. On a release-worthy main run, the shared release writer
 receives the version and commit from the verified artifact seal. It checks out
 that commit and refuses to tag if the release plan changed while building. If
 main advances while the writer is checking the branch, the writer still tags
-that sealed commit and does not update main. Pages then independently
+that sealed commit and does not update main. A `GIT_CONFIG_COUNT` value that
+rewrites `url.insteadOf` is outside this guard; using it would require control
+of the runner environment. Pages then independently
 requires the published stable tag, exact current main and the sealed artifact
 from that attempt, so a superseded commit is left for the newer main run to publish. A tag or version mismatch leaves the current live site
 unchanged. `RELEASES_ENABLED=false`
