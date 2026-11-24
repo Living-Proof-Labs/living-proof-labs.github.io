@@ -1,0 +1,80 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# semantic-release 25 proves push access with `git push --dry-run HEAD:main`.
+# That probe is rejected once main has moved, before any tag is created, and the
+# shared writer then aborts the sealed release. Publication itself only pushes
+# tags and notes. Accept the non-fast-forward probe when this commit is still an
+# ancestor of main, and refuse every push that would update a branch.
+set -euo pipefail
+
+real=${GIT_REAL:-/usr/bin/git}
+if [[ ! -x "$real" ]]; then
+  echo "release git guard could not find git" >&2
+  exit 127
+fi
+
+refuse() {
+  echo "release git guard: $*" >&2
+  exit 1
+}
+
+if [[ "${1:-}" != push ]]; then
+  exec "$real" "$@"
+fi
+
+for arg in "$@"; do
+  case "$arg" in
+    --force|--force-with-lease|--force-with-lease=*|+*)
+      refuse "refusing a force push"
+      ;;
+  esac
+done
+
+if [[ $# -eq 6 && "$2" == --dry-run && "$3" == --no-verify && "$4" == -- && "$6" == HEAD:main ]]; then
+  err=$(mktemp)
+  trap 'rm -f "$err"' EXIT
+  set +e
+  "$real" "$@" 2>"$err"
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    exit 0
+  fi
+  if grep -E -q 'Authentication failed|Permission to|Access denied|403|401|could not read Username' "$err"; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  if ! grep -E -q 'non-fast-forward|rejected|failed to push some refs|tip of your current branch is behind' "$err"; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  url=$5
+  if ! "$real" fetch --no-tags -- "$url" '+refs/heads/main:refs/remotes/release-guard/main'; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  remote_sha=$("$real" rev-parse refs/remotes/release-guard/main)
+  head=$("$real" rev-parse HEAD)
+  if [[ ! "$remote_sha" =~ ^[0-9a-f]{40}$ || ! "$head" =~ ^[0-9a-f]{40}$ || "$remote_sha" == "$head" ]]; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  if "$real" merge-base --is-ancestor "$head" "$remote_sha"; then
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      echo 'Main moved during release; publishing the tag for this commit without updating main.' >> "$GITHUB_STEP_SUMMARY"
+    fi
+    exit 0
+  fi
+  cat "$err" >&2
+  exit "$status"
+fi
+
+# Exact forms used by semantic-release 25: tags, then release notes. No branch refspec.
+if [[ $# -eq 4 && "$2" == --tags && "$3" == -- ]]; then
+  exec "$real" "$@"
+fi
+if [[ $# -eq 4 && "$2" == -- && "$4" == refs/notes/* ]]; then
+  exec "$real" "$@"
+fi
+
+refuse "refusing a push that is not a tag or notes update"

@@ -28,6 +28,12 @@ USES = re.compile(
     rf"(?P<file>[\w.-]+\.ya?ml)@(?P<ref>\S+)\s*$",
     re.MULTILINE,
 )
+# The writer workflow checks out moving main. This publisher calls the writer
+# action directly so the sealed commit can be tagged after main advances.
+ACTION = re.compile(
+    rf"^\s+uses:\s*{re.escape(REPO)}/\.github/actions/semantic-release@(?P<ref>\S+)\s*$",
+    re.MULTILINE,
+)
 PRESET = re.compile(rf"^github>{REPO}:renovate-preset#(?P<ref>.+)$")
 SHARED_WORKFLOWS = {
     "semantic-release.yml": {
@@ -85,7 +91,9 @@ def preset_refs(config: dict | None = None) -> list[str]:
 def pinned_versions(text: str | None = None, config: dict | None = None) -> set[str]:
     refs = set(preset_refs(config))
     if text is not None or workflow_path() is not None:
+        body = text if text is not None else workflow_path().read_text()
         refs |= {match.group("ref") for match in guideline_calls(text).values()}
+        refs |= {match.group("ref") for match in ACTION.finditer(body)}
     return refs
 
 
@@ -162,7 +170,9 @@ class GuidelinesPins(unittest.TestCase):
         self.assertIsNotNone(path, "publisher must call the shared resolver and writer")
         text = path.read_text()
         calls = guideline_calls(text)
-        self.assertCountEqual([match.group("file") for match in calls.values()], SHARED_WORKFLOWS)
+        self.assertCountEqual(
+            [match.group("file") for match in calls.values()], ["semantic-release-candidate.yml"])
+        self.assertNotIn("semantic-release.yml", [match.group("file") for match in calls.values()])
         for name, match in calls.items():
             contract = SHARED_WORKFLOWS[match.group("file")]
             with self.subTest(job=name):
@@ -189,7 +199,8 @@ class GuidelinesPins(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("LIVINGPROOF_NETWORK"), "set LIVINGPROOF_NETWORK=1")
     def test_recorded_interfaces_match_both_pinned_shared_workflows(self) -> None:
         calls = guideline_calls()
-        self.assertCountEqual([match.group("file") for match in calls.values()], SHARED_WORKFLOWS)
+        self.assertCountEqual(
+            [match.group("file") for match in calls.values()], ["semantic-release-candidate.yml"])
         for match in calls.values():
             file, ref = match.group("file", "ref")
             with self.subTest(workflow=file, tag=ref):

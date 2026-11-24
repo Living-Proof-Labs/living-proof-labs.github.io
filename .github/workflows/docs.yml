@@ -139,12 +139,41 @@ jobs:
       needs.build.outputs.artifact-run-id == github.run_id &&
       needs.build.outputs.artifact-attempt == github.run_attempt &&
       (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.9.11
-    with:
-      expected-version: ${{ needs.build.outputs.artifact-version }}
-      expected-commit: ${{ needs.build.outputs.artifact-commit }}
+    # The shared writer workflow checks out moving main, then semantic-release
+    # abandons the sealed commit when a dry-run branch push is rejected.
+    # Publish tags for github.sha instead, and do not update main.
+    concurrency:
+      group: shared-semantic-release
+      cancel-in-progress: false
+    outputs:
+      draft-created: ${{ steps.release.outputs.draft-created }}
+      published: ${{ steps.release.outputs.published }}
+      version: ${{ steps.release.outputs.version }}
+      git-tag: ${{ steps.release.outputs.git-tag }}
+      commit: ${{ steps.release.outputs.commit }}
+      release-url: ${{ steps.release.outputs.release-url }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the tag-only git guard
+        run: |
+          dir="$RUNNER_TEMP/release-git"
+          mkdir -p "$dir"
+          cp tools/release_git "$dir/git"
+          chmod 0755 "$dir/git"
+          echo "$dir" >> "$GITHUB_PATH"
+      - uses: Living-Proof-Labs/collaboration-guidelines/.github/actions/semantic-release@v9.9.11
+        id: release
+        with:
+          token: ${{ github.token }}
+          expected-version: ${{ needs.build.outputs.artifact-version }}
+          expected-commit: ${{ needs.build.outputs.artifact-commit }}
   deploy:
     needs: [version, build, release]
     if: >-

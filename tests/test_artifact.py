@@ -248,13 +248,27 @@ class DeployWorkflow(unittest.TestCase):
         self.assertIn("needs.version.outputs.git-tag != ''", release['if'])
         self.assertIn('needs.version.outputs.version == needs.build.outputs.artifact-version', release['if'])
         self.assertIn('needs.version.outputs.commit == needs.build.outputs.artifact-commit', release['if'])
-        self.assertEqual(release['with'], {
+        self.assertNotIn('uses', release)
+        self.assertNotIn('with', release)
+        self.assertEqual(release['runs-on'], 'ubuntu-24.04')
+        self.assertEqual(release['concurrency'], {
+            'group': 'shared-semantic-release', 'cancel-in-progress': False,
+        })
+        writer = next(step for step in release['steps']
+                      if 'semantic-release@' in step.get('uses', ''))
+        self.assertEqual(writer['id'], 'release')
+        candidate_ref = version['uses'].rpartition('@')[2]
+        self.assertEqual(
+            writer['uses'],
+            'Living-Proof-Labs/collaboration-guidelines/.github/actions/semantic-release@' + candidate_ref)
+        self.assertEqual(writer['with'], {
+            'token': '${{ github.token }}',
             'expected-version': '${{ needs.build.outputs.artifact-version }}',
             'expected-commit': '${{ needs.build.outputs.artifact-commit }}',
         })
         for job in (jobs['verify-transport'], deploy):
-            self.assertEqual(job['env']['PUBLISHER_VERSION'], release['with']['expected-version'])
-            self.assertEqual(job['env']['PUBLISHER_SHA'], release['with']['expected-commit'])
+            self.assertEqual(job['env']['PUBLISHER_VERSION'], writer['with']['expected-version'])
+            self.assertEqual(job['env']['PUBLISHER_SHA'], writer['with']['expected-commit'])
         for job in (release, deploy):
             self.assertIn('needs.build.outputs.artifact-run-id == github.run_id', job['if'])
             self.assertIn('needs.build.outputs.artifact-attempt == github.run_attempt', job['if'])
@@ -266,7 +280,19 @@ class DeployWorkflow(unittest.TestCase):
         })
         seal = next(step for step in build['steps'] if step.get('id') == 'seal')
         self.assertEqual(seal['run'], 'python3 tools/check_artifact.py seal artifacts')
-        self.assertEqual(release['uses'].partition('@')[0], f'{prefix}semantic-release.yml')
+        checkout = release['steps'][0]
+        self.assertEqual(checkout['uses'], build['steps'][0]['uses'])
+        self.assertEqual(checkout['with'], {
+            'ref': '${{ github.sha }}', 'fetch-depth': 0, 'persist-credentials': False,
+        })
+        guard = release['steps'][1]
+        self.assertLess(release['steps'].index(guard), release['steps'].index(writer))
+        self.assertIn('cp tools/release_git "$dir/git"', guard['run'])
+        self.assertIn('echo "$dir" >> "$GITHUB_PATH"', guard['run'])
+        self.assertNotIn('semantic-release.yml@', (ROOT / '.github/workflows/docs.yml').read_text())
+        self.assertEqual(release['outputs']['published'], '${{ steps.release.outputs.published }}')
+        self.assertEqual(release['outputs']['git-tag'], '${{ steps.release.outputs.git-tag }}')
+        self.assertEqual(release['outputs']['commit'], '${{ steps.release.outputs.commit }}')
         self.assertEqual(deploy['needs'], ['version', 'build', 'release'])
         self.assertIn("needs.build.result == 'success'", deploy['if'])
         self.assertIn("needs.release.result == 'success'", deploy['if'])
