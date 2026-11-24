@@ -36,6 +36,17 @@ def run_guard(*args, cwd, git_real='/usr/bin/git'):
     return subprocess.run([str(GUARD), *args], cwd=cwd, capture_output=True, text=True, env=env)
 
 
+def recording_git(tmp):
+    fake = Path(tmp) / 'git'
+    log = Path(tmp) / 'log'
+    fake.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> ' + repr(str(log)) + '\nexit 0\n')
+    fake.chmod(0o755)
+    return fake, log
+
+
+URL = 'https://example.test/repo.git'
+
+
 class ReleaseGitGuard(unittest.TestCase):
     def test_guard_invokes_real_git_by_absolute_path(self):
         source = GUARD.read_text()
@@ -113,26 +124,96 @@ class ReleaseGitGuard(unittest.TestCase):
             self.assertIn('403', result.stderr)
             self.assertNotIn('fetch', log.read_text())
 
-    def test_force_and_branch_updates_are_refused(self):
+    def assert_refused(self, args, message, cwd, git_real, log):
+        log.write_text('')
+        result = run_guard(*args, cwd=cwd, git_real=git_real)
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn(message, result.stderr)
+        for other in (
+            'refusing a force push',
+            'refusing a forced refspec',
+            'refusing a push that is not a tag or notes update',
+            'refusing an unrecognized git option',
+        ):
+            if other != message:
+                self.assertNotIn(other, result.stderr)
+        self.assertEqual(log.read_text(), '')
+        return result
+
+    def test_force_push_is_refused_before_the_catchall(self):
         with tempfile.TemporaryDirectory() as tmp:
-            fake = Path(tmp) / 'git'
-            log = Path(tmp) / 'log'
-            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> ' + repr(str(log)) + '\nexit 0\n')
-            fake.chmod(0o755)
-            env_cwd = tmp
+            fake, log = recording_git(tmp)
             cases = [
-                ['push', '--force', '--tags', '--', 'https://example.test/repo.git'],
-                ['push', '--force-with-lease', '--', 'https://example.test/repo.git', 'HEAD:main'],
-                ['push', '--', 'https://example.test/repo.git', 'HEAD:main'],
-                ['push', '--', 'https://example.test/repo.git', '+refs/heads/main'],
+                ['push', '--force', '--tags', '--', URL],
+                ['push', '--force-with-lease', '--', URL, 'HEAD:main'],
+                ['push', '--force-with-lease=refs/heads/main', '--tags', '--', URL],
+            ]
+            for args in cases:
+                with self.subTest(args=args):
+                    self.assert_refused(args, 'refusing a force push', tmp, str(fake), log)
+
+    def test_forced_refspec_is_refused_before_the_catchall(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['push', '--', URL, '+refs/heads/main'],
+                ['push', '--', URL, '+refs/notes/semantic-release-v1.2.3'],
+            ]
+            for args in cases:
+                with self.subTest(args=args):
+                    self.assert_refused(args, 'refusing a forced refspec', tmp, str(fake), log)
+
+    def test_branch_update_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['push', '--', URL, 'HEAD:main'],
+                'refusing a push that is not a tag or notes update', tmp, str(fake), log)
+
+    def test_config_option_cannot_hide_a_force_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['-c', 'core.commentChar=+', 'push', '--force', '--tags', '--', URL],
+                ['-cprotocol.version=2', 'push', '--force', '--tags', '--', URL],
+                ['--git-dir=/tmp/not-a-repo', 'push', '--force', '--', URL, 'HEAD:main'],
+                ['--git-dir', '/tmp/not-a-repo', 'push', '--force-with-lease', '--', URL, 'HEAD:main'],
+            ]
+            for args in cases:
+                with self.subTest(args=args):
+                    self.assert_refused(args, 'refusing a force push', tmp, str(fake), log)
+
+    def test_directory_option_cannot_hide_a_branch_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['-C', '/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
+                ['-C/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
+                ['-c', 'k=v', '-C', '/tmp/not-used', 'push', '--', URL, '+refs/heads/main'],
+            ]
+            expectations = [
+                'refusing a push that is not a tag or notes update',
+                'refusing a push that is not a tag or notes update',
+                'refusing a forced refspec',
+            ]
+            for args, message in zip(cases, expectations):
+                with self.subTest(args=args):
+                    self.assert_refused(args, message, tmp, str(fake), log)
+
+    def test_global_options_stay_on_forwarded_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['-c', 'protocol.version=2', 'push', '--tags', '--', URL],
+                ['-C', '/tmp/not-used', 'rev-parse', 'HEAD'],
+                ['--git-dir=/tmp/not-a-repo', 'status'],
             ]
             for args in cases:
                 log.write_text('')
                 with self.subTest(args=args):
-                    result = run_guard(*args, cwd=env_cwd, git_real=str(fake))
-                    self.assertNotEqual(result.returncode, 0, result.stderr)
-                    self.assertIn('refusing', result.stderr)
-                    self.assertEqual(log.read_text(), '')
+                    result = run_guard(*args, cwd=tmp, git_real=str(fake))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(log.read_text().strip(), ' '.join(args))
 
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:

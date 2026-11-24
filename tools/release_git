@@ -4,7 +4,8 @@
 # That probe is rejected once main has moved, before any tag is created, and the
 # shared writer then aborts the sealed release. Publication itself only pushes
 # tags and notes. Accept the non-fast-forward probe when this commit is still an
-# ancestor of main, and refuse every push that would update a branch.
+# ancestor of main. Refuse force pushes, forced refspecs, and branch updates,
+# including when they follow git's global options.
 set -euo pipefail
 
 real=${GIT_REAL:-/usr/bin/git}
@@ -18,14 +19,67 @@ refuse() {
   exit 1
 }
 
-if [[ "${1:-}" != push ]]; then
-  exec "$real" "$@"
+# Git global options sit before the subcommand. Skip the known ones so
+# `git -c … push` and `git -C … push` are judged as pushes. Anything else
+# that looks like an option is refused rather than executed.
+orig=("$@")
+idx=0
+count=${#orig[@]}
+while [[ $idx -lt $count ]]; do
+  token=${orig[$idx]}
+  case "$token" in
+    -c|--config-env)
+      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
+      idx=$((idx + 2))
+      ;;
+    -C)
+      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
+      idx=$((idx + 2))
+      ;;
+    --git-dir|--work-tree|--namespace|--super-prefix)
+      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
+      idx=$((idx + 2))
+      ;;
+    -c?*|--config-env=*)
+      idx=$((idx + 1))
+      ;;
+    -C?*)
+      idx=$((idx + 1))
+      ;;
+    --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--exec-path=*)
+      idx=$((idx + 1))
+      ;;
+    -p|--paginate|-P|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks)
+      idx=$((idx + 1))
+      ;;
+    --exec-path)
+      idx=$((idx + 1))
+      ;;
+    --)
+      idx=$((idx + 1))
+      break
+      ;;
+    -*)
+      refuse "refusing an unrecognized git option"
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $idx -ge $count || ${orig[$idx]} != push ]]; then
+  exec "$real" "${orig[@]}"
 fi
+set -- "${orig[@]:$idx}"
 
 for arg in "$@"; do
   case "$arg" in
-    --force|--force-with-lease|--force-with-lease=*|+*)
+    --force|--force-with-lease|--force-with-lease=*)
       refuse "refusing a force push"
+      ;;
+    +*)
+      refuse "refusing a forced refspec"
       ;;
   esac
 done
@@ -34,7 +88,7 @@ if [[ $# -eq 6 && "$2" == --dry-run && "$3" == --no-verify && "$4" == -- && "$6"
   err=$(mktemp)
   trap 'rm -f "$err"' EXIT
   set +e
-  "$real" "$@" 2>"$err"
+  "$real" "${orig[@]}" 2>"$err"
   status=$?
   set -e
   if [[ "$status" -eq 0 ]]; then
@@ -71,10 +125,10 @@ fi
 
 # Exact forms used by semantic-release 25: tags, then release notes. No branch refspec.
 if [[ $# -eq 4 && "$2" == --tags && "$3" == -- ]]; then
-  exec "$real" "$@"
+  exec "$real" "${orig[@]}"
 fi
 if [[ $# -eq 4 && "$2" == -- && "$4" == refs/notes/* ]]; then
-  exec "$real" "$@"
+  exec "$real" "${orig[@]}"
 fi
 
 refuse "refusing a push that is not a tag or notes update"
