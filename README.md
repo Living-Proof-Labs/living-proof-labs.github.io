@@ -16,8 +16,8 @@ change it there, not here. Search covers only the
 published root pages, not other repositories' manuals.
 
 `content.lock.json` is a reviewed `documentation-v1` pin of protected
-`.github` main `2c7351e47f3c22f58ccc6539a70bbfb359347a25` (the merge of
-Living-Proof-Labs/.github#186, Apache-2.0 only), and the SHA-256 of that documentation payload. The
+`.github` main `dbf9895d74c95410adb6bb8b9222c88ba05393c4` (release v1.5.5, the merge of
+Living-Proof-Labs/.github#188, which lists the verification-reports-action manual), and the SHA-256 of that documentation payload. The
 publisher acquires those docs through the canonical GitHub API. The strict
 settings audit is not an input to this pin, and this lock does not publish an
 operational `.github` release. A later protected-main commit needs its own
