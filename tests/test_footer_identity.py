@@ -30,9 +30,7 @@ def git(repo, *args):
 
 
 def make_publisher_fixture(root, content_repo, lock):
-    (root / 'LICENSES').mkdir()
-    (root / 'LICENSES' / 'CC-BY-4.0.txt').write_text('CC-BY-4.0\n')
-    (root / 'LICENSE.md').write_text('# License\n\nApache-2.0\n')
+    (root / 'LICENSE').write_text('Apache License 2.0\n')
     (root / 'Taskfile.yml').write_text(
         "version: '3'\ntasks:\n  setup:\n    desc: Setup\n    cmds:\n      - echo ok\n"
     )

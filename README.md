@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Living Proof Labs documentation root
 
 **[Start here: documentation](https://docs.livingprooflabs.com/)**
@@ -117,9 +117,9 @@ or artifact. No old attempt's artifact is reused.
 
 ## Compatibility and rollback
 
-Keep `/vision.html`, `/#published-manuals`, `/#livingproof`, prior section anchors
-and `/LICENSES/*.txt` working. `use_directory_urls: false` preserves HTML routes.
-The full vision retains Apache-2.0 attribution; see [license scopes](LICENSE.md).
+Keep `/vision.html`, `/#published-manuals`, `/#livingproof`, and prior section anchors
+working. `use_directory_urls: false` preserves HTML routes. The publisher
+repository and its generated pages are [Apache-2.0](LICENSE).
 
 A content rollback moves `content.lock.json` back to the last known-good `.github`
 commit through review and rebuilds. A publisher rollback reverts the PR here.

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Vendored Mermaid
 
 `mermaid-12.2.0.min.js` is `dist/mermaid.min.js` from the npm package
