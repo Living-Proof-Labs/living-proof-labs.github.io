@@ -12,6 +12,12 @@ on:
         type: string
 permissions:
   contents: read
+# Main publication is one queue. A newer candidate must not plan a version
+# before the previous writer has tagged, or the newer run goes red and
+# nothing deploys. Pull requests keep a separate group per ref.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'main-publication' || github.ref }}
+  cancel-in-progress: false
 jobs:
   version:
     permissions:
@@ -139,12 +145,49 @@ jobs:
       needs.build.outputs.artifact-run-id == github.run_id &&
       needs.build.outputs.artifact-attempt == github.run_attempt &&
       (vars.RELEASES_ENABLED == '' || vars.RELEASES_ENABLED == 'true')
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release.yml@v9.9.12
-    with:
-      expected-version: ${{ needs.build.outputs.artifact-version }}
-      expected-commit: ${{ needs.build.outputs.artifact-commit }}
+    # The shared writer workflow checks out moving main, then semantic-release
+    # abandons the sealed commit when a dry-run branch push is rejected.
+    # Publish tags for github.sha instead, and do not update main.
+    concurrency:
+      group: shared-semantic-release
+      cancel-in-progress: false
+    outputs:
+      draft-created: ${{ steps.release.outputs.draft-created }}
+      published: ${{ steps.release.outputs.published }}
+      version: ${{ steps.release.outputs.version }}
+      git-tag: ${{ steps.release.outputs.git-tag }}
+      commit: ${{ steps.release.outputs.commit }}
+      release-url: ${{ steps.release.outputs.release-url }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # A detached checkout makes semantic-release fetch +refs/heads/main.
+      # Stay on main at this exact commit so that fetch does not update a branch.
+      - name: Attach main at the sealed commit
+        run: |
+          set -euo pipefail
+          git checkout --force -B main "$GITHUB_SHA"
+          test "$(git rev-parse --abbrev-ref HEAD)" = main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install the tag-only git guard
+        run: |
+          dir="$RUNNER_TEMP/release-git"
+          mkdir -p "$dir"
+          cp tools/release_git "$dir/git"
+          chmod 0755 "$dir/git"
+          echo "$dir" >> "$GITHUB_PATH"
+      - uses: Living-Proof-Labs/collaboration-guidelines/.github/actions/semantic-release@v9.9.12
+        id: release
+        with:
+          token: ${{ github.token }}
+          expected-version: ${{ needs.build.outputs.artifact-version }}
+          expected-commit: ${{ needs.build.outputs.artifact-commit }}
   deploy:
     needs: [version, build, release]
     if: >-

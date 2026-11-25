@@ -1,0 +1,384 @@
+#!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# semantic-release 25 proves push access with `git push --dry-run HEAD:main`.
+# That probe is rejected once main has moved, before any tag is created, and the
+# shared writer then aborts the sealed release. Publication itself only pushes
+# tags and notes. Accept the non-fast-forward probe when this commit is still an
+# ancestor of main.
+#
+# Only the subcommands and argument shapes used by semantic-release 25.0.9 and
+# the pinned writer action are forwarded. Command-line config (-c and
+# --config-env) is refused. An environment-level GIT_CONFIG_COUNT rewrite of
+# url.insteadOf is outside this guard: using it would require control of the
+# runner environment.
+set -euo pipefail
+
+real=${GIT_REAL:-/usr/bin/git}
+if [[ ! -x "$real" ]]; then
+  echo "release git guard could not find git" >&2
+  exit 127
+fi
+
+refuse() {
+  echo "release git guard: $*" >&2
+  exit 1
+}
+
+# git-log-parser argv after semantic-release assigns its fields.
+LOG_PARSER_FORMAT='%H==FIELD==%h==FIELD==%T==FIELD==%t==FIELD==%an==FIELD==%ae==FIELD==%ai==FIELD==%cn==FIELD==%ce==FIELD==%ci==FIELD==%s==FIELD==%b==FIELD==%H==FIELD==%B==FIELD==%d==FIELD==%ci==END=='
+FOR_EACH_REF_FORMAT='%(refname:short)%00%(objecttype)%00%(objectname)%00%(*objectname)'
+
+is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+is_stable_tag() { [[ "$1" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; }
+is_remote() {
+  local remote=$1
+  [[ "$remote" == origin ]] && return 0
+  [[ "$remote" == https://* && "$remote" != *$'\n'* && "$remote" != *' '* && "$remote" != -* ]] && return 0
+  [[ -n "$remote" && "$remote" != -* && "$remote" != *:* && "$remote" != *$'\n'* ]] && return 0
+  return 1
+}
+is_rev() {
+  is_sha "$1" && return 0
+  is_stable_tag "$1" && return 0
+  [[ "$1" == HEAD || "$1" == main ]] && return 0
+  return 1
+}
+is_range() {
+  local spec=$1 left right
+  [[ "$spec" == *..* ]] || return 1
+  left=${spec%%..*}
+  right=${spec#*..}
+  [[ "$left" != "$spec" && "$right" != "$spec" && "$right" != *..* ]] || return 1
+  is_rev "$left" && is_rev "$right"
+}
+is_notes_leaf() { [[ "$1" =~ ^refs/notes/[A-Za-z0-9._+-]+$ ]]; }
+
+# --upload-pack, --receive-pack and --exec can run an arbitrary command.
+refuse_remote_commands() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --upload-pack|--upload-pack=*|--receive-pack|--receive-pack=*|--exec|--exec=*|-u|-u*)
+        refuse "refusing a remote command option"
+        ;;
+    esac
+  done
+}
+
+allow_rev_parse() {
+  [[ "$1" == rev-parse ]] || return 1
+  if [[ $# -eq 2 && ( "$2" == HEAD || "$2" == --is-shallow-repository || "$2" == --git-dir ) ]]; then
+    return 0
+  fi
+  if [[ $# -eq 3 && "$2" == --abbrev-ref && "$3" == HEAD ]]; then
+    return 0
+  fi
+  if [[ $# -eq 3 && "$2" == --verify ]]; then
+    local ref=$3 tag
+    [[ "$ref" == HEAD ]] && return 0
+    is_sha "$ref" && return 0
+    case "$ref" in
+      refs/tags/v*"^{commit}")
+        tag=${ref#refs/tags/}
+        tag=${tag%^\{commit\}}
+        is_stable_tag "$tag"
+        return
+        ;;
+      v*"^{commit}")
+        tag=${ref%^\{commit\}}
+        is_stable_tag "$tag"
+        return
+        ;;
+    esac
+  fi
+  return 1
+}
+
+allow_rev_list() {
+  # getTagHead passes the tag name, not a commit.
+  [[ $# -eq 3 && "$1" == rev-list && "$2" == -1 ]] || return 1
+  is_stable_tag "$3"
+}
+
+allow_tag() {
+  [[ "$1" == tag ]] || return 1
+  if [[ $# -eq 3 && "$2" == --merged ]]; then
+    is_rev "$3"
+    return
+  fi
+  # Create one stable tag at a commit. No -f, -d, or branch destination.
+  [[ $# -eq 3 ]] || return 1
+  is_stable_tag "$2" && is_sha "$3"
+}
+
+allow_log() {
+  [[ "$1" == log ]] || return 1
+  if [[ $# -eq 4 && "$2" == -z && "$3" == --format=%H%x00%B ]]; then
+    is_rev "$4" || is_range "$4"
+    return
+  fi
+  if [[ $# -eq 3 && "$2" == "--format=${LOG_PARSER_FORMAT}" ]]; then
+    is_rev "$3" || is_range "$3"
+    return
+  fi
+  [[ $# -eq 6 && "$2" == '--tags=*' && "$3" == '--decorate-refs=refs/tags/*' && "$4" == --no-walk \
+    && "$5" == '--format=%d%x09%N' && "$6" == '--notes=refs/notes/semantic-release*' ]]
+}
+
+allow_fetch() {
+  local remote spec
+  [[ "$1" == fetch ]] || return 1
+  # No refspec: tags from the repository URL. Used when HEAD is on main.
+  if [[ $# -eq 5 && "$2" == --unshallow && "$3" == --tags && "$4" == -- ]]; then
+    is_remote "$5"
+    return
+  fi
+  if [[ $# -eq 4 && "$2" == --tags && "$3" == -- ]]; then
+    is_remote "$4"
+    return
+  fi
+  # Notes only, both sides of the refspec. The star is literal.
+  if [[ $# -eq 5 && "$2" == --unshallow && "$3" == -- ]]; then
+    is_remote "$4" && [[ "$5" == '+refs/notes/*:refs/notes/*' ]]
+    return
+  fi
+  if [[ $# -eq 4 && "$2" == -- ]]; then
+    is_remote "$3" && [[ "$4" == '+refs/notes/*:refs/notes/*' ]]
+    return
+  fi
+  # The writer refetches the tag it just pushed. Destination stays under refs/tags.
+  if [[ $# -eq 4 && "$4" == --force ]]; then
+    remote=$2
+    spec=$3
+    is_remote "$remote" || return 1
+    [[ "$spec" == refs/tags/*:refs/tags/* && "$spec" != *'+'* ]] || return 1
+    local src=${spec%%:*} dst=${spec#*:}
+    [[ "$src" == "$dst" ]] || return 1
+    local name=${src#refs/tags/}
+    is_stable_tag "$name"
+    return
+  fi
+  return 1
+}
+
+allow_ls_remote() {
+  [[ "$1" == ls-remote ]] || return 1
+  if [[ $# -eq 4 && "$2" == --heads && "$3" == -- ]]; then
+    is_remote "$4"
+    return
+  fi
+  if [[ $# -eq 5 && "$2" == --heads && "$3" == -- ]]; then
+    is_remote "$4" && [[ "$5" == main ]]
+    return
+  fi
+  if [[ $# -eq 5 && "$2" == --tags && "$3" == -- ]]; then
+    is_remote "$4" || return 1
+    [[ "$5" == refs/tags/* ]] || return 1
+    is_stable_tag "${5#refs/tags/}"
+    return
+  fi
+  return 1
+}
+
+allow_notes() {
+  # notes --ref semantic-release-vX.Y.Z add -f -m <json> vX.Y.Z
+  [[ $# -eq 8 && "$1" == notes && "$2" == --ref && "$4" == add && "$5" == -f && "$6" == -m ]] || return 1
+  local note_ref=$3 message=$7 target=$8
+  [[ "$message" != -* ]] || return 1
+  is_stable_tag "$target" || return 1
+  [[ "$note_ref" == "semantic-release-${target}" ]]
+}
+
+allow_for_each_ref() {
+  [[ $# -eq 3 && "$1" == for-each-ref && "$2" == "--format=${FOR_EACH_REF_FORMAT}" && "$3" == refs/tags ]]
+}
+
+allow_check_ref_format() {
+  [[ $# -eq 2 && "$1" == check-ref-format ]] || return 1
+  local ref=$2 name
+  case "$ref" in
+    refs/tags/*) name=${ref#refs/tags/} ;;
+    refs/heads/*) name=${ref#refs/heads/} ;;
+    *) return 1 ;;
+  esac
+  [[ "$name" != */* && "$name" != *:* && "$name" != *..* && "$name" =~ ^[A-Za-z0-9._+-]+$ ]]
+}
+
+allow_config() {
+  [[ $# -eq 3 && "$1" == config && "$2" == --get && "$3" == remote.origin.url ]]
+}
+
+# Neither semantic-release 25.0.9 nor the v9.9.12 writer passes -C or --git-dir.
+# Skipping them would run git inside a planted repo whose uploadpack is arbitrary.
+# -c and --config-env are never forwarded.
+orig=("$@")
+refuse_remote_commands "${orig[@]}"
+idx=0
+count=${#orig[@]}
+while [[ $idx -lt $count ]]; do
+  token=${orig[$idx]}
+  case "$token" in
+    -c|-c?*)
+      refuse "refusing a git config override"
+      ;;
+    --config-env|--config-env=*)
+      refuse "refusing a git config override"
+      ;;
+    -C|-C?*|--git-dir|--git-dir=*)
+      refuse "refusing an unused git option"
+      ;;
+    --exec-path|--exec-path=*)
+      refuse "refusing an unused git option"
+      ;;
+    --work-tree|--work-tree=*)
+      refuse "refusing an unused git option"
+      ;;
+    --namespace|--namespace=*)
+      refuse "refusing an unused git option"
+      ;;
+    --super-prefix|--super-prefix=*)
+      refuse "refusing an unused git option"
+      ;;
+    -p|--paginate|-P|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks)
+      idx=$((idx + 1))
+      ;;
+    --)
+      idx=$((idx + 1))
+      break
+      ;;
+    -*)
+      refuse "refusing an unrecognized git option"
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ $idx -ge $count ]]; then
+  refuse "refusing an unknown git subcommand"
+fi
+set -- "${orig[@]:$idx}"
+
+case "$1" in
+  rev-parse)
+    allow_rev_parse "$@" || refuse "refusing rev-parse arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  rev-list)
+    allow_rev_list "$@" || refuse "refusing rev-list arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  tag)
+    allow_tag "$@" || refuse "refusing tag arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  log)
+    allow_log "$@" || refuse "refusing log arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  fetch)
+    allow_fetch "$@" || refuse "refusing fetch arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  ls-remote)
+    allow_ls_remote "$@" || refuse "refusing ls-remote arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  notes)
+    allow_notes "$@" || refuse "refusing notes arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  check-ref-format)
+    allow_check_ref_format "$@" || refuse "refusing check-ref-format arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  for-each-ref)
+    allow_for_each_ref "$@" || refuse "refusing for-each-ref arguments"
+    exec "$real" "${orig[@]}"
+    ;;
+  config)
+    allow_config "$@" || refuse "refusing a git config change"
+    exec "$real" "${orig[@]}"
+    ;;
+  push)
+    ;;
+  *)
+    refuse "refusing an unknown git subcommand"
+    ;;
+esac
+
+for arg in "$@"; do
+  case "$arg" in
+    --force|--force-with-lease|--force-with-lease=*)
+      refuse "refusing a force push"
+      ;;
+    +*)
+      refuse "refusing a forced refspec"
+      ;;
+  esac
+done
+
+if [[ $# -eq 6 && "$2" == --dry-run && "$3" == --no-verify && "$4" == -- && "$6" == HEAD:main ]]; then
+  is_remote "$5" || refuse "refusing a push remote"
+  err=$(mktemp)
+  trap 'rm -f "$err"' EXIT
+  set +e
+  "$real" "${orig[@]}" 2>"$err"
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    exit 0
+  fi
+  if grep -E -q 'Authentication failed|Permission to|Access denied|403|401|could not read Username' "$err"; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  if ! grep -E -q 'non-fast-forward|rejected|failed to push some refs|tip of your current branch is behind' "$err"; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  url=$5
+  if ! "$real" fetch --no-tags -- "$url" '+refs/heads/main:refs/remotes/release-guard/main'; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  remote_sha=$("$real" rev-parse refs/remotes/release-guard/main)
+  head=$("$real" rev-parse HEAD)
+  if [[ ! "$remote_sha" =~ ^[0-9a-f]{40}$ || ! "$head" =~ ^[0-9a-f]{40}$ || "$remote_sha" == "$head" ]]; then
+    cat "$err" >&2
+    exit "$status"
+  fi
+  if "$real" merge-base --is-ancestor "$head" "$remote_sha"; then
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      echo 'Main moved during release; publishing the tag for this commit without updating main.' >> "$GITHUB_STEP_SUMMARY"
+    fi
+    exit 0
+  fi
+  cat "$err" >&2
+  exit "$status"
+fi
+
+# Tags only. No branch refspec.
+if [[ $# -eq 4 && "$2" == --tags && "$3" == -- ]]; then
+  is_remote "$4" || refuse "refusing a push remote"
+  exec "$real" "${orig[@]}"
+fi
+
+# Bare refs/notes/<name>, or src:dst with both sides under refs/notes. No plus, no branch destination.
+if [[ $# -eq 4 && "$2" == -- && ( "$4" == refs/notes/* || "$4" == +refs/notes/* ) ]]; then
+  is_remote "$3" || refuse "refusing a push remote"
+  spec=$4
+  if [[ "$spec" != *:* ]]; then
+    is_notes_leaf "$spec" || refuse "refusing a notes refspec"
+    exec "$real" "${orig[@]}"
+  fi
+  src=${spec%%:*}
+  dst=${spec#*:}
+  if is_notes_leaf "$src" && is_notes_leaf "$dst" && [[ "$src" != *:* && "$dst" != *:* ]]; then
+    exec "$real" "${orig[@]}"
+  fi
+  refuse "refusing a notes refspec"
+fi
+
+refuse "refusing a push that is not a tag or notes update"
