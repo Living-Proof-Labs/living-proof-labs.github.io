@@ -524,6 +524,51 @@ class ReleaseGitGuard(unittest.TestCase):
                     self.assert_refused(
                         args, 'refusing rev-list arguments', tmp, str(fake), log)
 
+    def test_probe_rejection_is_not_accepted_when_main_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'log'
+            fake = Path(tmp) / 'git'
+            head = 'b' * 40
+            fake.write_text(
+                '#!/bin/bash\n'
+                f'printf "%s\\n" "$*" >> {str(log)!r}\n'
+                'if [[ "$1" == push ]]; then\n'
+                '  echo " ! [rejected] main -> main (non-fast-forward)" >&2\n'
+                '  echo "failed to push some refs" >&2\n'
+                '  exit 1\n'
+                'fi\n'
+                f'if [[ "$1" == rev-parse && "$2" == refs/remotes/release-guard/main ]]; then echo {head}; exit 0; fi\n'
+                f'if [[ "$1" == rev-parse && "$2" == HEAD ]]; then echo {head}; exit 0; fi\n'
+                'if [[ "$1" == merge-base ]]; then exit 0; fi\n'
+                'exit 0\n')
+            fake.chmod(0o755)
+            result = run_guard(
+                'push', '--dry-run', '--no-verify', '--', URL, 'HEAD:main',
+                cwd=tmp, git_real=str(fake))
+            self.assertNotEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('merge-base', log.read_text() if log.exists() else '')
+
+    def test_ls_remote_heads_allows_only_main(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['ls-remote', '--heads', '--', URL, 'feature'],
+                'refusing ls-remote arguments', tmp, str(fake), log)
+
+    def test_https_remote_rejects_a_newline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['fetch', '--tags', '--', 'https://example.test/repo.git\n--upload-pack=touch'],
+                'refusing fetch arguments', tmp, str(fake), log)
+
+    def test_dry_run_probe_requires_no_verify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['push', '--dry-run', '--quiet', '--', URL, 'HEAD:main'],
+                'refusing a push that is not a tag or notes update', tmp, str(fake), log)
+
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / 'git'

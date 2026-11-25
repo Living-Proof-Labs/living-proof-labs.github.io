@@ -12,6 +12,12 @@ on:
         type: string
 permissions:
   contents: read
+# Main publication is one queue. A newer candidate must not plan a version
+# before the previous writer has tagged, or the newer run goes red and
+# nothing deploys. Pull requests keep a separate group per ref.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'main-publication' || github.ref }}
+  cancel-in-progress: false
 jobs:
   version:
     permissions:
