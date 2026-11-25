@@ -40,8 +40,8 @@ def make_content_repo(repo, *, tag='v1.0.0', tag_on_branch_only=False):
     return commit
 
 
-REVIEWED_SOURCE = '5ee53121d9ce5b8e730797f3970880da334a0820'
-REVIEWED_DIGEST = '5fdba0b6449451f2e1d802f95be8dc0219fb6fca63d9de4acf32ff6b7b539c83'
+REVIEWED_SOURCE = '2c7351e47f3c22f58ccc6539a70bbfb359347a25'
+REVIEWED_DIGEST = '66f8bd2ce443c0d4ec3bab255388ebb4807ce66a6e7ce24d56e6edfdf1f66f20'
 
 
 class CommittedLock(unittest.TestCase):

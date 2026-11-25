@@ -47,12 +47,12 @@ def make_content_fixture(repo, *, tag='v1.1.1'):
     (repo / 'docs' / 'architecture').mkdir(parents=True)
     site_json = {
         'pages': [
-            {'source': 'docs/index.md', 'path': 'index.md', 'title': 'Start here', 'license': 'CC-BY-4.0'},
+            {'source': 'docs/index.md', 'path': 'index.md', 'title': 'Start here', 'license': 'Apache-2.0'},
             {
                 'source': 'docs/architecture/verification-architecture.md',
                 'path': 'architecture/verification-architecture.md',
                 'title': 'Verification architecture',
-                'license': 'CC-BY-4.0',
+                'license': 'Apache-2.0',
             },
         ],
         'directory': 'docs/directory.json',

@@ -93,11 +93,8 @@ def validate_site(site):
                 and not output.casefold().startswith(('assets/', 'media/', 'licenses/')),
                 'page collides with publisher-owned output')
         require(source not in sources and output.casefold() not in outputs, 'duplicate page declaration')
-        # 2026-11-25: CC-BY-4.0 is still accepted only because the pinned
-        # Living-Proof-Labs/.github docs/site.json declares it. Drop it with the
-        # content.lock.json bump after Living-Proof-Labs/.github#183 merges
-        # (collaboration-guidelines#162).
-        require(text(page['title']) and page['license'] in ('Apache-2.0', 'CC-BY-4.0'),
+        # Organization pages are Apache-2.0 only (collaboration-guidelines#162).
+        require(text(page['title']) and page['license'] == 'Apache-2.0',
                 'invalid page metadata')
         sources.add(source)
         outputs.add(output.casefold())

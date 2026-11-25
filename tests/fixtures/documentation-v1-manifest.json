@@ -1,35 +1,35 @@
 {
-  "commit": "5ee53121d9ce5b8e730797f3970880da334a0820",
+  "commit": "2c7351e47f3c22f58ccc6539a70bbfb359347a25",
   "files": [
     {
       "path": "docs/GITHUB-APPS.md",
-      "sha256": "5bb3ede05016f13c8fee92153d9b20ab374abe5c950fdf0b64c576717532ece0",
-      "size": 50789
+      "sha256": "4fedae5e734d18e4f9cfe1e01964fa61b2e726702e5acc03ae34c4bf9c3bce63",
+      "size": 50790
     },
     {
       "path": "docs/architecture/verification-architecture.md",
-      "sha256": "585225be108a3930e9df45519b55ff000a628afe5efb2a5d3b3f3a1c7e6e055c",
-      "size": 21292
+      "sha256": "a9285160f58cd2694572f00251b277e0399dd76371b09a1e204ebbbfc242576f",
+      "size": 23322
     },
     {
       "path": "docs/contribute.md",
-      "sha256": "fb8277304137431ea05c0e491193d5cf17f076dd84fb8c80053caf64b6cfb8e4",
-      "size": 6230
+      "sha256": "05b77b07436c5e1a719e33c210eb1912e9663d3567518a08c175ee6ae0ca8206",
+      "size": 6221
     },
     {
       "path": "docs/directory.json",
-      "sha256": "91076706fe2d14f1f10611d36d1a1f538e34ee7e2d156c27a72b0193198b3063",
-      "size": 8013
+      "sha256": "4725a76cc33c4a22f07693fd3a62723dc7f5701690dbb58ce441b382b71f832c",
+      "size": 8271
     },
     {
       "path": "docs/index.md",
-      "sha256": "b8e83d55e490e81ec988c6d60fe99410e7744c79c4a551da799dc85504dee8c2",
-      "size": 14228
+      "sha256": "421c5bc71d327c9212e1deb081f310f205dd009cb490ef4e3033ca6b0868a606",
+      "size": 14450
     },
     {
       "path": "docs/media/NOTICE.txt",
-      "sha256": "de97fe0c33a30f58a45940961b4d30787a92c7514928cb0040aeeb6f56f7cbd4",
-      "size": 2522
+      "sha256": "0ab8b9691b95abdb15f1b500c5141a5207ce6b844c2f42964ea28baac9055a50",
+      "size": 2785
     },
     {
       "path": "docs/media/g1-comparison-poster.jpg",
@@ -38,8 +38,8 @@
     },
     {
       "path": "docs/media/g1-comparison.en.vtt",
-      "sha256": "7652f3d89dc87f712ba55926603391c5bd85d1ea0e1382dbe0f042880b246428",
-      "size": 1325
+      "sha256": "f98557762b887358a5c5dd41589e0ed96df42fcaf587e43d9b1c9543c5459aec",
+      "size": 1337
     },
     {
       "path": "docs/media/g1-comparison.mp4",
@@ -48,23 +48,23 @@
     },
     {
       "path": "docs/quickstart.md",
-      "sha256": "d695c94a6a279002be9aa0eec9e04719a4e075603816274c6f02639e321dfaff",
-      "size": 5436
+      "sha256": "c0179c1043b0b4bae0347a6202157d8f6672bbb86255d9080001c6ba6b0065e7",
+      "size": 5437
     },
     {
       "path": "docs/reading-reports.md",
-      "sha256": "800591dd0b6684c0268faa8b4e852c2339f5df3a292548cfb7dde652db00cdd9",
-      "size": 5478
+      "sha256": "e6c379b894df29c0bf18331317334f996bd6fd9d76b649e0236ab6873b85119d",
+      "size": 5479
     },
     {
       "path": "docs/site.json",
-      "sha256": "daf31fdab0f06b55d01e73da81a7f4c59eec8d726cb65fddf4e636f5482690ed",
-      "size": 1499
+      "sha256": "a57666a17b4958e0e39d8bf7cab85fef43d633722a596120c2135a05d9d372f9",
+      "size": 1505
     },
     {
       "path": "docs/vision.md",
-      "sha256": "78b83726232676643ac54d9bc4d9fc47df33abcf746eb29e4da0416dc68edab2",
-      "size": 16212
+      "sha256": "88c312adf431f95bb3002d0faba3f31bdea1e6c1f68d115e5d4ce6fd1b8d639a",
+      "size": 16752
     }
   ],
   "repository": "Living-Proof-Labs/.github",
