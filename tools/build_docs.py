@@ -38,7 +38,7 @@ PUBLISHER = 'Living-Proof-Labs/living-proof-labs.github.io'
 LOCK = ROOT / 'content.lock.json'
 BRAND_LOCK = ROOT / 'docs-brand.lock.json'
 MERMAID = 'mermaid-12.2.0.min.js'
-LICENSE_PAGE = {'LICENSE.md': 'license.md'}
+LICENSE_PAGE = {'LICENSE': 'license.md'}
 
 
 def brand_css():
@@ -263,9 +263,10 @@ def main():
     for src, dest in LICENSE_PAGE.items():
         text = (ROOT / src).read_text()
         publisher_files[src] = hashlib.sha256(text.encode()).hexdigest()
-        (source / dest).write_text(text)
-        licenses[dest] = 'CC-BY-4.0'
-    shutil.copytree(ROOT / 'LICENSES', source / 'LICENSES')
+        # Keep the published #license-scopes anchor for existing links.
+        (source / dest).write_text(
+            f'# License\n\n<a id="license-scopes"></a>\n\n```text\n{text.rstrip()}\n```\n')
+        licenses[dest] = 'Apache-2.0'
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
     (source / 'assets/brand.css').write_bytes(brand_css())
@@ -289,7 +290,7 @@ def main():
         lines += [f'## {name}', '', task.get('desc', ''), '', '```text',
                   command('task', name, '--summary'), '```', '']
     (source / 'tasks.md').write_text('\n'.join(lines))
-    licenses['tasks.md'] = 'CC-BY-4.0'
+    licenses['tasks.md'] = 'Apache-2.0'
     run = os.environ.get('GITHUB_RUN_ID')
     redirects = site.get('redirects', {})
     generator_name, generator_version = installed_zensical()
@@ -350,7 +351,7 @@ The build does not import or search other projects' manuals. Their deployments a
 evidence remain independent.
 
 '''+(f'[Deployment workflow run](https://github.com/{PUBLISHER}/actions/runs/{run}).\n' if run else 'Local preview: no hosted workflow run is claimed.\n'))
-    licenses['source.md'] = 'CC-BY-4.0'
+    licenses['source.md'] = 'Apache-2.0'
     for page in sorted(source.rglob('*.md')):
         rel = page.relative_to(source).as_posix()
         text = re.sub(r'\A---\n.*?\n---\n', '', page.read_text(), flags=re.S)
@@ -378,7 +379,7 @@ evidence remain independent.
         issues = f'{content_url}/issues' if origin else f'https://github.com/{PUBLISHER}/issues'
         text += (f'\n---\n\n[Documentation home](https://docs.livingprooflabs.com/) · '
                  f'[Source]({page_source}) · [Help / report an issue]({issues}) · '
-                 f'[License: {licenses.get(rel, "CC-BY-4.0")}]({here}license.md)\n')
+                 f'[License: {licenses.get(rel, "Apache-2.0")}]({here}license.md)\n')
         page.write_text(text)
     config = yaml.safe_load((ROOT / 'docs/mkdocs.yml').read_text())
     nav = [{p['title']: p['path']} for p in site['pages']]

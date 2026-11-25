@@ -472,6 +472,15 @@ class BrowserTests(unittest.TestCase):
         self._assert_clean_identity_footer(build)
         expect(self.page.locator('article')).to_contain_text('License: Apache-2.0')
         expect(self.page.locator('article')).to_contain_text('not proof of root cause')
+        # One Apache-2.0 license page at the existing URL and anchor (collaboration-guidelines#162).
+        self.page.goto(self.base + '/license.html#license-scopes')
+        expect(self.page.locator('#license-scopes')).to_have_count(1)
+        article = self.page.locator('article')
+        expect(article).to_contain_text('Apache License')
+        expect(article).to_contain_text('Version 2.0, January 2004')
+        expect(article).to_contain_text('License: Apache-2.0')
+        self.assertNotIn('CC BY', article.inner_text())
+        self.assertNotIn('Creative Commons', article.inner_text())
 
     def test_broken_same_site_file_is_not_excused(self):
         """A same-site 404 and an abort no navigation caused still fail the suite."""

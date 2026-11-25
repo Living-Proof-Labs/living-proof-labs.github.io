@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 # Documentation-only source mode
 
 This support route implements [.github #152](https://github.com/Living-Proof-Labs/.github/issues/152).
