@@ -30,8 +30,8 @@ NOTICE_TIP = '942d173900079d1c070e8076b39501f50d481335'
 RECORDING = {
     'g1-comparison.mp4': '918330b81b9e4de5c6a5b9c5b3aa81de21c42e9ddd246c049e8b1acdb07ca0ca',
     'g1-comparison-poster.jpg': 'f4cf729e36fd5a6def52a151346e1aae842023694f74895ab3190452de361455',
-    'g1-comparison.en.vtt': '7652f3d89dc87f712ba55926603391c5bd85d1ea0e1382dbe0f042880b246428',
-    'NOTICE.txt': 'de97fe0c33a30f58a45940961b4d30787a92c7514928cb0040aeeb6f56f7cbd4',
+    'g1-comparison.en.vtt': 'f98557762b887358a5c5dd41589e0ed96df42fcaf587e43d9b1c9543c5459aec',
+    'NOTICE.txt': '0ab8b9691b95abdb15f1b500c5141a5207ce6b844c2f42964ea28baac9055a50',
 }
 CAVEAT = (
     'Historical recording: the Booster T1 pane in the segment from 00:47 to 00:56 '

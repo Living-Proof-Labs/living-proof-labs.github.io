@@ -21,7 +21,7 @@ def fixture():
     site = {
         'schema_version': 1,
         'pages': [{'source': 'docs/index.md', 'path': 'index.md',
-                   'title': 'Start here', 'license': 'CC-BY-4.0'}],
+                   'title': 'Start here', 'license': 'Apache-2.0'}],
         'directory': 'docs/directory.json',
         'redirects': {},
     }
@@ -129,7 +129,7 @@ class DocumentationPayload(unittest.TestCase):
                              ('source', 'docs/unapproved.md'), ('path', '../index.md'),
                              ('path', 'assets/index.md'), ('path', 'version.md'),
                              ('path', 'Version.md'), ('path', 'ASSETS/index.md'),
-                             ('license', 'unknown')]:
+                             ('license', 'unknown'), ('license', 'CC-BY-4.0')]:
             variant = copy.deepcopy(site)
             variant['pages'][0][field] = value
             variants.append(variant)

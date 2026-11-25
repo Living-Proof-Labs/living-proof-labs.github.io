@@ -122,7 +122,7 @@ class CommonVersionedBuild(unittest.TestCase):
             (content / 'docs/directory.json').write_text('{"manuals": [], "projects": []}')
             (content / 'docs/site.json').write_text(json.dumps({
                 'pages': [{'source': 'docs/index.md', 'path': 'index.md', 'title': 'Docs',
-                           'license': 'CC-BY-4.0'}],
+                           'license': 'Apache-2.0'}],
                 'directory': 'docs/directory.json',
             }))
             build_lock = json.loads((ROOT / 'content.lock.json').read_text())
