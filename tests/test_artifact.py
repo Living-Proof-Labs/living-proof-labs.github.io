@@ -285,8 +285,12 @@ class DeployWorkflow(unittest.TestCase):
         self.assertEqual(checkout['with'], {
             'ref': '${{ github.sha }}', 'fetch-depth': 0, 'persist-credentials': False,
         })
-        attach = next(step for step in release['steps'] if 'checkout --force -B main' in step.get('run', ''))
-        self.assertIn('git rev-parse --abbrev-ref HEAD', attach['run'])
+        attach = next(step for step in release['steps']
+                      if step.get('name') == 'Attach main at the sealed commit')
+        self.assertIn('git checkout --force -B main "$GITHUB_SHA"\n', attach['run'])
+        self.assertIn('test "$(git rev-parse --abbrev-ref HEAD)" = main\n', attach['run'])
+        self.assertIn('test "$(git rev-parse HEAD)" = "$GITHUB_SHA"\n', attach['run'])
+        self.assertNotIn('origin/main', attach['run'])
         guard = next(step for step in release['steps'] if 'tools/release_git' in step.get('run', ''))
         self.assertLess(release['steps'].index(checkout), release['steps'].index(attach))
         self.assertLess(release['steps'].index(attach), release['steps'].index(guard))

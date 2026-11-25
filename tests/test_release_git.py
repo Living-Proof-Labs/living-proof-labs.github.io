@@ -150,7 +150,10 @@ class ReleaseGitGuard(unittest.TestCase):
             'refusing notes arguments',
             'refusing for-each-ref arguments',
             'refusing ls-remote arguments',
+            'refusing log arguments',
             'refusing rev-parse arguments',
+            'refusing an unused git option',
+            'refusing a push remote',
         ):
             if other != message:
                 self.assertNotIn(other, result.stderr)
@@ -357,6 +360,7 @@ class ReleaseGitGuard(unittest.TestCase):
             plus = run_guard('push', '--', str(bare), '+refs/notes/semantic-release-v1.2.3', cwd=built)
             self.assertNotEqual(plus.returncode, 0)
             self.assertIn('refusing a forced refspec', plus.stderr)
+            self.assertNotIn('refusing a notes refspec', plus.stderr)
 
     def test_fetch_cannot_run_a_remote_command_or_update_a_branch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -397,6 +401,90 @@ class ReleaseGitGuard(unittest.TestCase):
             for args, message in cases:
                 with self.subTest(args=args):
                     self.assert_refused(args, message, tmp, str(fake), log)
+
+    def test_unused_global_options_do_not_run_a_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            cases = [
+                ['--exec-path=/tmp/ep', 'push', '--tags', '--', URL],
+                ['--exec-path', '/tmp/ep', 'ls-remote', '--heads', '--', URL],
+                ['--work-tree=/tmp/wt', 'rev-parse', 'HEAD'],
+                ['--work-tree', '/tmp/wt', 'rev-parse', 'HEAD'],
+                ['--namespace=hidden', 'rev-parse', 'HEAD'],
+                ['--namespace', 'hidden', 'rev-parse', 'HEAD'],
+                ['--super-prefix=pre', 'rev-parse', 'HEAD'],
+                ['--super-prefix', 'pre', 'rev-parse', 'HEAD'],
+            ]
+            for args in cases:
+                with self.subTest(args=args[0]):
+                    self.assert_refused(args, 'refusing an unused git option', tmp, str(fake), log)
+
+    def test_rev_parse_rejects_an_extra_argument(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['rev-parse', 'HEAD', '--foo'], 'refusing rev-parse arguments', tmp, str(fake), log)
+
+    def test_log_rejects_an_extra_argument(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['log', '-z', '--format=%H%x00%B', 'HEAD', '--all'],
+                'refusing log arguments', tmp, str(fake), log)
+
+    def test_ls_remote_rejects_an_extra_argument(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['ls-remote', '--heads', '--', URL, 'main', '--exit-code'],
+                'refusing ls-remote arguments', tmp, str(fake), log)
+
+    def test_fetch_tag_source_must_match_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['fetch', 'origin', 'refs/tags/v1.2.3:refs/tags/v9.9.9', '--force'],
+                'refusing fetch arguments', tmp, str(fake), log)
+
+    def test_remote_with_a_colon_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            for remote in ('ext::git', 'git@github.com:org/repo.git'):
+                with self.subTest(remote=remote):
+                    self.assert_refused(
+                        ['fetch', '--tags', '--', remote],
+                        'refusing fetch arguments', tmp, str(fake), log)
+
+    def test_dry_run_push_rejects_a_non_remote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['push', '--dry-run', '--no-verify', '--', 'ext::evil', 'HEAD:main'],
+                'refusing a push remote', tmp, str(fake), log)
+
+    def test_tags_push_rejects_a_non_remote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['push', '--tags', '--', 'git@github.com:org/repo.git'],
+                'refusing a push remote', tmp, str(fake), log)
+
+    def test_unknown_global_option_is_not_forwarded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['--not-a-real-option', 'rev-parse', 'HEAD'],
+                'refusing an unrecognized git option', tmp, str(fake), log)
+
+    def test_bare_notes_ref_must_be_one_component(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            self.assert_refused(
+                ['push', '--', URL, 'refs/notes/../heads/main'],
+                'refusing a notes refspec', tmp, str(fake), log)
+            self.assert_refused(
+                ['push', '--', URL, 'refs/notes/foo/bar'],
+                'refusing a notes refspec', tmp, str(fake), log)
 
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -226,20 +226,29 @@ while [[ $idx -lt $count ]]; do
       [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
       idx=$((idx + 2))
       ;;
-    --git-dir|--work-tree|--namespace|--super-prefix)
+    --git-dir)
       [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
       idx=$((idx + 2))
+      ;;
+    --git-dir=*)
+      idx=$((idx + 1))
       ;;
     -C?*)
       idx=$((idx + 1))
       ;;
-    --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--exec-path=*)
-      idx=$((idx + 1))
+    --exec-path|--exec-path=*)
+      refuse "refusing an unused git option"
+      ;;
+    --work-tree|--work-tree=*)
+      refuse "refusing an unused git option"
+      ;;
+    --namespace|--namespace=*)
+      refuse "refusing an unused git option"
+      ;;
+    --super-prefix|--super-prefix=*)
+      refuse "refusing an unused git option"
       ;;
     -p|--paginate|-P|--no-pager|--bare|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks)
-      idx=$((idx + 1))
-      ;;
-    --exec-path)
       idx=$((idx + 1))
       ;;
     --)
@@ -369,9 +378,6 @@ fi
 if [[ $# -eq 4 && "$2" == -- && ( "$4" == refs/notes/* || "$4" == +refs/notes/* ) ]]; then
   is_remote "$3" || refuse "refusing a push remote"
   spec=$4
-  if [[ "$spec" == +* ]]; then
-    refuse "refusing a forced refspec"
-  fi
   if [[ "$spec" != *:* ]]; then
     is_notes_leaf "$spec" || refuse "refusing a notes refspec"
     exec "$real" "${orig[@]}"
