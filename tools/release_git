@@ -95,8 +95,9 @@ allow_rev_parse() {
 }
 
 allow_rev_list() {
+  # getTagHead passes the tag name, not a commit.
   [[ $# -eq 3 && "$1" == rev-list && "$2" == -1 ]] || return 1
-  is_stable_tag "$3" || is_sha "$3"
+  is_stable_tag "$3"
 }
 
 allow_tag() {
@@ -207,8 +208,9 @@ allow_config() {
   [[ $# -eq 3 && "$1" == config && "$2" == --get && "$3" == remote.origin.url ]]
 }
 
-# Git global options sit before the subcommand. -C and --git-dir are skipped
-# so the subcommand can be judged. -c and --config-env are never forwarded.
+# Neither semantic-release 25.0.9 nor the v9.9.12 writer passes -C or --git-dir.
+# Skipping them would run git inside a planted repo whose uploadpack is arbitrary.
+# -c and --config-env are never forwarded.
 orig=("$@")
 refuse_remote_commands "${orig[@]}"
 idx=0
@@ -222,19 +224,8 @@ while [[ $idx -lt $count ]]; do
     --config-env|--config-env=*)
       refuse "refusing a git config override"
       ;;
-    -C)
-      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
-      idx=$((idx + 2))
-      ;;
-    --git-dir)
-      [[ $((idx + 1)) -lt $count ]] || refuse "refusing a git option without its value"
-      idx=$((idx + 2))
-      ;;
-    --git-dir=*)
-      idx=$((idx + 1))
-      ;;
-    -C?*)
-      idx=$((idx + 1))
+    -C|-C?*|--git-dir|--git-dir=*)
+      refuse "refusing an unused git option"
       ;;
     --exec-path|--exec-path=*)
       refuse "refusing an unused git option"

@@ -152,6 +152,8 @@ class ReleaseGitGuard(unittest.TestCase):
             'refusing ls-remote arguments',
             'refusing log arguments',
             'refusing rev-parse arguments',
+            'refusing rev-list arguments',
+            'refusing check-ref-format arguments',
             'refusing an unused git option',
             'refusing a push remote',
         ):
@@ -190,40 +192,23 @@ class ReleaseGitGuard(unittest.TestCase):
                 ['push', '--', URL, 'HEAD:main'],
                 'refusing a push that is not a tag or notes update', tmp, str(fake), log)
 
-    def test_config_option_cannot_hide_a_force_push(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            fake, log = recording_git(tmp)
-            cases = [
-                ['--git-dir=/tmp/not-a-repo', 'push', '--force', '--', URL, 'HEAD:main'],
-                ['--git-dir', '/tmp/not-a-repo', 'push', '--force-with-lease', '--', URL, 'HEAD:main'],
-            ]
-            for args in cases:
-                with self.subTest(args=args):
-                    self.assert_refused(args, 'refusing a force push', tmp, str(fake), log)
-
-    def test_directory_option_cannot_hide_a_branch_push(self):
+    def test_directory_and_git_dir_are_unused_options(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake, log = recording_git(tmp)
             cases = [
                 ['-C', '/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
-                ['-C/tmp/not-used', 'push', '--', URL, 'HEAD:main'],
-                ['-C', '/tmp/not-used', 'push', '--', URL, '+refs/heads/main'],
+                ['-C/tmp/not-used', 'fetch', 'origin', 'refs/tags/v1.0.0:refs/tags/v1.0.0', '--force'],
+                ['--git-dir', '/tmp/not-a-repo', 'push', '--force', '--', URL, 'HEAD:main'],
+                ['--git-dir=/tmp/not-a-repo', 'fetch', '--tags', '--', 'origin'],
             ]
-            expectations = [
-                'refusing a push that is not a tag or notes update',
-                'refusing a push that is not a tag or notes update',
-                'refusing a forced refspec',
-            ]
-            for args, message in zip(cases, expectations):
-                with self.subTest(args=args):
-                    self.assert_refused(args, message, tmp, str(fake), log)
+            for args in cases:
+                with self.subTest(args=args[0]):
+                    self.assert_refused(args, 'refusing an unused git option', tmp, str(fake), log)
 
     def test_global_options_stay_on_forwarded_commands(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake, log = recording_git(tmp)
             cases = [
-                ['-C', '/tmp/not-used', 'rev-parse', 'HEAD'],
-                ['--git-dir=/tmp/not-a-repo', 'rev-parse', '--git-dir'],
                 ['--', 'tag', '--merged', 'main'],
             ]
             for args in cases:
@@ -297,7 +282,6 @@ class ReleaseGitGuard(unittest.TestCase):
                 ['rev-parse', '--verify', 'v1.2.3^{commit}'],
                 ['rev-parse', '--git-dir'],
                 ['rev-list', '-1', 'v1.2.3'],
-                ['rev-list', '-1', SHA],
                 ['tag', '--merged', 'main'],
                 ['tag', '--merged', SHA],
                 ['tag', 'v1.2.3', SHA],
@@ -315,7 +299,6 @@ class ReleaseGitGuard(unittest.TestCase):
                 ['ls-remote', '--heads', '--', URL, 'main'],
                 ['ls-remote', '--tags', '--', URL, 'refs/tags/v1.2.3'],
                 ['config', '--get', 'remote.origin.url'],
-                ['-C', '/tmp/not-used', 'config', '--get', 'remote.origin.url'],
                 ['notes', '--ref', 'semantic-release-v1.2.3', 'add', '-f', '-m', '{}', 'v1.2.3'],
                 ['check-ref-format', 'refs/tags/v0.0.0'],
                 ['check-ref-format', 'refs/heads/main'],
@@ -485,6 +468,61 @@ class ReleaseGitGuard(unittest.TestCase):
             self.assert_refused(
                 ['push', '--', URL, 'refs/notes/foo/bar'],
                 'refusing a notes refspec', tmp, str(fake), log)
+
+    def test_planted_uploadpack_does_not_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evil = root / 'evil'
+            marker = root / 'PWNED'
+            git('init', '-b', 'main', str(evil))
+            commit(evil, 'planted')
+            git('config', 'remote.origin.url', 'https://example.invalid/repo.git', repo=evil)
+            git('config', 'remote.origin.uploadpack', f'touch {marker}; false', repo=evil)
+            cases = [
+                ['-C', str(evil), 'fetch', 'origin', 'refs/tags/v1.0.0:refs/tags/v1.0.0', '--force'],
+                ['-C' + str(evil), 'fetch', 'origin', 'refs/tags/v1.0.0:refs/tags/v1.0.0', '--force'],
+                ['--git-dir', str(evil / '.git'), 'fetch', '--tags', '--', 'origin'],
+                ['--git-dir=' + str(evil / '.git'), 'fetch', '--tags', '--', 'origin'],
+            ]
+            for args in cases:
+                marker.unlink(missing_ok=True)
+                with self.subTest(args=args[0]):
+                    result = run_guard(*args, cwd=tmp)
+                    self.assertNotEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('refusing an unused git option', result.stderr)
+                    self.assertFalse(marker.exists())
+
+    def test_tag_create_requires_a_commit_sha(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            for target in ('HEAD', 'main'):
+                with self.subTest(target=target):
+                    self.assert_refused(
+                        ['tag', 'v1.0.0', target], 'refusing tag arguments', tmp, str(fake), log)
+
+    def test_check_ref_format_rejects_extra_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            for args in (
+                ['check-ref-format', 'refs/tags/v1.2.3', '--normalize'],
+                ['check-ref-format', '--branch'],
+            ):
+                with self.subTest(args=args):
+                    self.assert_refused(
+                        args, 'refusing check-ref-format arguments', tmp, str(fake), log)
+
+    def test_rev_list_accepts_only_a_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake, log = recording_git(tmp)
+            for args in (
+                ['rev-list', '-1', 'HEAD'],
+                ['rev-list', '-1', SHA],
+                ['rev-list', 'v1.2.3'],
+                ['rev-list', '-1', 'v1.2.3', '--count'],
+            ):
+                with self.subTest(args=args):
+                    self.assert_refused(
+                        args, 'refusing rev-list arguments', tmp, str(fake), log)
 
     def test_tag_and_notes_pushes_are_forwarded_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
