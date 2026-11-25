@@ -263,7 +263,9 @@ def main():
     for src, dest in LICENSE_PAGE.items():
         text = (ROOT / src).read_text()
         publisher_files[src] = hashlib.sha256(text.encode()).hexdigest()
-        (source / dest).write_text(f'# License\n\n```text\n{text.rstrip()}\n```\n')
+        # Keep the published #license-scopes anchor for existing links.
+        (source / dest).write_text(
+            f'# License\n\n<a id="license-scopes"></a>\n\n```text\n{text.rstrip()}\n```\n')
         licenses[dest] = 'Apache-2.0'
     (source / 'assets').mkdir()
     shutil.copyfile(ROOT / 'docs/landing.css', source / 'assets/landing.css')
