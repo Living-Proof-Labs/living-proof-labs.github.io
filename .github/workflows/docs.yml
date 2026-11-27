@@ -22,7 +22,7 @@ jobs:
   version:
     permissions:
       contents: read
-    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release-candidate.yml@v9.10.2
+    uses: Living-Proof-Labs/collaboration-guidelines/.github/workflows/semantic-release-candidate.yml@v9.10.3
     with:
       replay-tag: ${{ inputs.release_tag || '' }}
   build:
@@ -182,7 +182,7 @@ jobs:
           cp tools/release_git "$dir/git"
           chmod 0755 "$dir/git"
           echo "$dir" >> "$GITHUB_PATH"
-      - uses: Living-Proof-Labs/collaboration-guidelines/.github/actions/semantic-release@v9.10.2
+      - uses: Living-Proof-Labs/collaboration-guidelines/.github/actions/semantic-release@v9.10.3
         id: release
         with:
           token: ${{ github.token }}
